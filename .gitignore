@@ -1,1 +1,4 @@
 data/
+outputs/
+*.pyc
+data_wrangling.ipynb
