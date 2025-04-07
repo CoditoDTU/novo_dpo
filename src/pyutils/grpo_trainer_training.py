@@ -40,8 +40,8 @@ GRADIENT_NORMS = []
 FILENAME = "antimicrobial_peptides_dictionary2.json"
 
 #DATA_PATH = os.path.join("home/developer/Projects/novo_dpo", 'data', 'processed', FILENAME)
-DATA_PATH = "/home/developer/Projects/novo_dpo/data/processed/amp.json"#antimicrobial_peptides_dictionary2.json"
-#DATA_PATH = "../../data/processed/"#trainanti_microbial_peptides3.json"
+TRAIN_DATA_PATH = "/home/developer/Projects/novo_dpo/data/processed/amp_train.json"#antimicrobial_peptides_dictionary2.json"
+TEST_DATA_PATH = "/home/developer/Projects/novo_dpo/data/processed/amp_test.json"
 # Optimizer setup (As mentioned in deepseek math paper)
 optimizer = Adam(MODEL.parameters(),
                  lr = LERANING_RATE,
@@ -56,24 +56,28 @@ def main():
     # data_files = {"train": DATA_PATH, "test": DATA_PATH}
 
     # dataset = load_dataset("json", data_files = data_files, split="train")
-    with open(DATA_PATH, "r") as f:
-        data = json.load(f)
+    with open(TRAIN_DATA_PATH, "r") as f:
+        train_dataset = json.load(f)
+
+    with open(TEST_DATA_PATH, "r") as f:
+        test_dataset = json.load(f)
 
     # Load into HuggingFace dataset
-    hf_dataset = Dataset.from_dict(data)
-    print(hf_dataset)
-    print(hf_dataset[0])
+    hf_train_dataset = Dataset.from_dict(train_dataset)
+    hf_test_dataset = Dataset.from_dict(test_dataset)
 
 
     training_args = GRPOConfig(output_dir="Protgpt2_test",
                            logging_steps=1,
-                           report_to="none")
+                           report_to="none",
+                           num_iterations = 10)
 
     trainer = GRPOTrainer(
         model="NorseDrunkenSailor/ProtGPT2-with-pad",
         reward_funcs=reward_hydrophobicity,
         args=training_args,
-        train_dataset=hf_dataset
+        train_dataset=hf_train_dataset,
+        eval_dataset =hf_test_dataset,
     )
 
     trainer.train()
