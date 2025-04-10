@@ -16,8 +16,8 @@ from datasets import DatasetDict
 #PATHS
 TRAIN_FILENAME = 'amp_train.json'
 TEST_FILENAME = 'amp_test.json'
-TRAIN_DATA_PATH = os.path.join(os.getcwd(), "data", "processed", TRAIN_FILENAME)
-TEST_DATA_PATH = os.path.join(os.getcwd(), "data", "processed", TEST_FILENAME)
+#TRAIN_DATA_PATH = os.path.join(os.getcwd(), "data", "processed", TRAIN_FILENAME)
+#TEST_DATA_PATH = os.path.join(os.getcwd(), "data", "processed", TEST_FILENAME)
 OUTPUT_NAME = "protgpt2_test_rgd_0"
 
 #HYPERPARAMETERS:
@@ -40,14 +40,14 @@ config_dict = {
 
 
 def main():
-    print(TRAIN_DATA_PATH)
+    #print(TRAIN_DATA_PATH)
     
     # LOAD DATASETS
 
-    with open(TRAIN_DATA_PATH, "r") as f:
+    with open(TRAIN_FILENAME, "r") as f:
         train_dataset = json.load(f)
 
-    with open(TEST_DATA_PATH, "r") as f:
+    with open(TEST_FILENAME, "r") as f:
         test_dataset = json.load(f)
 
     # COMPATIBLE WITH HF 
