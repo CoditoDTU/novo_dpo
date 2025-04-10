@@ -41,7 +41,7 @@ config_dict = {
 
 def main():
     print(TRAIN_DATA_PATH)
-    raise NotImplementedError
+    
     # LOAD DATASETS
 
     with open(TRAIN_DATA_PATH, "r") as f:
