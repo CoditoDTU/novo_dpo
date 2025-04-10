@@ -14,8 +14,10 @@ from datasets import DatasetDict
 
 
 #PATHS
-TRAIN_DATA_PATH = "/home/developer/Projects/novo_dpo/data/processed/amp_train.json"
-TEST_DATA_PATH = "/home/developer/Projects/novo_dpo/data/processed/amp_test.json"
+TRAIN_FILENAME = 'amp_train.json'
+TEST_FILENAME = 'amp_test.json'
+TRAIN_DATA_PATH = os.path.join(os.getcwd(), "data", "processed", TRAIN_FILENAME)
+TEST_DATA_PATH = os.path.join(os.getcwd(), "data", "processed", TEST_FILENAME)
 OUTPUT_NAME = "protgpt2_test_rgd_0"
 
 #HYPERPARAMETERS:
@@ -38,7 +40,8 @@ config_dict = {
 
 
 def main():
-
+    print(TRAIN_DATA_PATH)
+    raise NotImplementedError
     # LOAD DATASETS
 
     with open(TRAIN_DATA_PATH, "r") as f:
