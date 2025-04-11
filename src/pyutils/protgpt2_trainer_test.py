@@ -25,6 +25,7 @@ LEARNING_RATE = 1e-8
 LOGGING_STEPS = 1
 NUM_GENERATIONS = 8
 NUM_ITERATIONS = 10
+MAX_COMPLETION = 32 #
 
 
 # ARGUMENTS
@@ -34,8 +35,8 @@ config_dict = {
     'learning_rate': LEARNING_RATE,
     'num_generations': NUM_GENERATIONS,
     'remove_unused_columns': True,
-    'log_completions': True
-
+    'log_completions': True,
+    'max_completion_length' : MAX_COMPLETION
 }
 
 
