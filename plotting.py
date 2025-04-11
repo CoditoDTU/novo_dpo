@@ -10,7 +10,7 @@ import math
 
 #JSON_PATH = "data/raw/trainer_state.json"
 
-JSON_PATH = os.path.join(os.getcwd(), "protgpt2_test_rgd_0", "trainer_state.json")
+JSON_PATH = os.path.join(os.getcwd(), "protgpt2_test_rgd_0","checkpoint-81", "trainer_state.json")
 PLOT_NAME = "novo_protgpt2_0.pdf"
 
 def extract_training_metrics(data: List[Dict[str, float]]) -> Dict[str, List[float]]:
