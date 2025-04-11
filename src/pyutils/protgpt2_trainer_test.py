@@ -18,12 +18,12 @@ TRAIN_FILENAME = 'amp_train.json'
 TEST_FILENAME = 'amp_test.json'
 TRAIN_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TRAIN_FILENAME)
 TEST_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TEST_FILENAME)
-OUTPUT_NAME = "protgpt2_test_rgd_1"
+OUTPUT_NAME = "protgpt2_test_rgd_2"
 
 #HYPERPARAMETERS:
 LEARNING_RATE = 1e-8
 LOGGING_STEPS = 1
-NUM_GENERATIONS = 8
+NUM_GENERATIONS = 100
 NUM_ITERATIONS = 10
 MAX_COMPLETION = 32 #
 
