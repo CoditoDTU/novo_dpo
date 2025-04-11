@@ -23,8 +23,8 @@ OUTPUT_NAME = "protgpt2_test_rgd_2"
 #HYPERPARAMETERS:
 LEARNING_RATE = 1e-8
 LOGGING_STEPS = 1
-NUM_GENERATIONS = 100
-NUM_ITERATIONS = 10
+NUM_GENERATIONS = 20
+NUM_ITERATIONS = 10 # mu in the GRPO algorithm
 MAX_COMPLETION = 32 #
 
 
@@ -34,9 +34,11 @@ config_dict = {
     'logging_steps': LOGGING_STEPS,
     'learning_rate': LEARNING_RATE,
     'num_generations': NUM_GENERATIONS,
+    'num_iterations': NUM_ITERATIONS, 
     'remove_unused_columns': True,
     'log_completions': True,
-    'max_completion_length' : MAX_COMPLETION
+    'max_completion_length' : MAX_COMPLETION,
+    'per_device_train_batch_size': 100,   # by default 8. it is the M in the GRPO paper. Num of generation must evenly divide it. 
 }
 
 
