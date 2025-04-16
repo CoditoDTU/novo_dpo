@@ -19,7 +19,7 @@ TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad"
 
 # GRPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_4'
+OUTPUT_NAME = 'DPO_protgpt2_5'
 LOGGING_STEPS = 1
 BETA = 1
 LEARNING_RATE = 1
