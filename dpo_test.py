@@ -19,14 +19,14 @@ TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad"
 
 # GRPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_8'
+OUTPUT_NAME = 'DPO_protgpt2_9'
 LOGGING_STEPS = 1
-BETA = 1
-LEARNING_RATE = 1e-3
+BETA = 0.1
+LEARNING_RATE = 1e-5
 ADAM_BETAS = (0.9, 0.999) 
 ADAM_EPSILON = 1e-8
 N_TRAIN_EPOCHS = 50
-ADAM_DECAY = 1e-2
+ADAM_DECAY = 0.1
 
 # %%
 # Config dict
