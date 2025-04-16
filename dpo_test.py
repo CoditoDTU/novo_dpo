@@ -14,12 +14,12 @@ from datasets import DatasetDict
 TRAIN_FILENAME = 'amp_dpo.json'
 TRAIN_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TRAIN_FILENAME)
 
-MODEL = "NorseDrunkenSailor/ProtGPT2-with-pad"
+MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 
 # GRPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_1'
+OUTPUT_NAME = 'DPO_protgpt2_2'
 LOGGING_STEPS = 1
 BETA = 0.1
 LEARNING_RATE = 1e-3
