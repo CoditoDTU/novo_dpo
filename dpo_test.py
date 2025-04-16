@@ -11,7 +11,7 @@ from datasets import DatasetDict
 
 # GRPO Trainer args
 
-TRAIN_FILENAME = 'amp_dpo.json'
+TRAIN_FILENAME = 'amp_dpo_fixed.json'
 TRAIN_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TRAIN_FILENAME)
 
 MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
@@ -19,7 +19,7 @@ TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad"
 
 # GRPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_5'
+OUTPUT_NAME = 'DPO_protgpt2_7'
 LOGGING_STEPS = 1
 BETA = 1
 LEARNING_RATE = 1
