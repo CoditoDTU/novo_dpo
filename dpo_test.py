@@ -3,21 +3,31 @@
 from datasets import load_dataset
 from trl import DPOConfig, DPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import os 
+import sys
+import json
+from datasets import Dataset
+from datasets import DatasetDict
 
 # GRPO Trainer args
-MODEL = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
-TOKENIZER = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+
+TRAIN_FILENAME = 'amp_dpo.json'
+TRAIN_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TRAIN_FILENAME)
+
+MODEL = "NorseDrunkenSailor/ProtGPT2-with-pad"
+TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 
 # GRPO config args
 
-OUTPUT_NAME = 'Qwen2-0.5B-DPO'
+OUTPUT_NAME = 'DPO_protgpt2_0'
 LOGGING_STEPS = 1
 BETA = 0.1
-LEARNING_RATE = 5e-05
-ADAM_BETAS = (0.9, 0.999) 
+LEARNING_RATE = 1e-05
+ADAM_BETAS = (0.9, 0.98) 
 ADAM_EPSILON = 1e-8
-N_TRAIN_EPOCHS = 1.0
-ADAM_DECAY = 0.0
+N_TRAIN_EPOCHS = 3.0
+ADAM_DECAY = 0.1
+
 # %%
 # Config dict
 config_dict = {
@@ -36,16 +46,19 @@ config_dict = {
 
 def main():
         
-    model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
-    train_dataset = load_dataset("trl-lib/ultrafeedback_binarized", split="train")
+    # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+
+    with open(TRAIN_DATA_PATH, "r") as f:
+        train_dataset = json.load(f)
+
+    hf_dataset = Dataset.from_dict(train_dataset)
 
     training_args = DPOConfig(**config_dict)
 
     trainer = DPOTrainer(model = MODEL,
                          args = training_args,
-                         processing_class = TOKENIZER,
-                         train_dataset = train_dataset)
+                         train_dataset = hf_dataset,
+                         processing_class = TOKENIZER)
     trainer.train()
 
 
