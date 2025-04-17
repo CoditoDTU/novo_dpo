@@ -20,6 +20,8 @@ TEST_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TEST_FILENAME)
 MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 
+MODEL_NAME_SAVE = 'protgpt2_dpo_16_samples'
+
 # GRPO config args
 
 OUTPUT_NAME = 'DPO_protgpt2_oxda_2'
@@ -68,7 +70,13 @@ def main():
                          eval_dataset = hf_test_dataset,
                          processing_class = TOKENIZER)
     trainer.train()
-    trainer.evaluate()
+    trainer.save_model()
+
+    eval = trainer.evaluate()
+    file_path = 'evaluate_dict_dpo_16s.json'
+
+    with open(file_path, "w") as json_file:
+        json.dump(eval, json_file, indent=4)
 
 
 
