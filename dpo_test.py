@@ -11,8 +11,8 @@ from datasets import DatasetDict
 
 # GRPO Trainer args
 
-TRAIN_FILENAME = 'OXDA_activity_dpo_train.json'
-TEST_FILENAME = 'OXDA_activity_dpo_test.json'
+TRAIN_FILENAME = 'OXDA_activity_dpo_train_16.json'
+TEST_FILENAME = 'OXDA_activity_dpo_test_16.json'
 
 TRAIN_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TRAIN_FILENAME)
 TEST_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TEST_FILENAME)
@@ -24,7 +24,7 @@ MODEL_NAME_SAVE = 'protgpt2_dpo_16_samples'
 
 # GRPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_oxda_2'
+OUTPUT_NAME = 'DPO_protgpt2_oxda_3'
 LOGGING_STEPS = 1
 BETA = 0.1
 LEARNING_RATE = 1e-5
