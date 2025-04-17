@@ -11,7 +11,7 @@ from datasets import DatasetDict
 
 # GRPO Trainer args
 
-TRAIN_FILENAME = 'amp_dpo_fixed.json'
+TRAIN_FILENAME = 'OXDA__activity_dpo.json'
 TRAIN_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TRAIN_FILENAME)
 
 MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
@@ -19,7 +19,7 @@ TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad"
 
 # GRPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_9'
+OUTPUT_NAME = 'DPO_protgpt2_oxda_0'
 LOGGING_STEPS = 1
 BETA = 0.1
 LEARNING_RATE = 1e-5
