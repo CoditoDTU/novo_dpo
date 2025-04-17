@@ -11,8 +11,8 @@ from datasets import DatasetDict
 
 # GRPO Trainer args
 
-TRAIN_FILENAME = 'OXDA_activity_dpo_train_16.json'
-TEST_FILENAME = 'OXDA_activity_dpo_test_16.json'
+TRAIN_FILENAME = 'OXDA_activity_dpo_train.json'
+TEST_FILENAME = 'OXDA_activity_dpo_test.json'
 
 TRAIN_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TRAIN_FILENAME)
 TEST_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TEST_FILENAME)
@@ -20,11 +20,11 @@ TEST_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TEST_FILENAME)
 MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 
-MODEL_NAME_SAVE = 'protgpt2_dpo_16_samples'
 
 # GRPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_oxda_3'
+OUTPUT_NAME = 'DPO_protgpt2_oxda_4'
+EVAL_JSON_PATH = os.path.join(os.getcwd(), OUTPUT_NAME,'evaluate_dict_dpo_4.json' )
 LOGGING_STEPS = 1
 BETA = 0.1
 LEARNING_RATE = 1e-5
@@ -51,7 +51,6 @@ config_dict = {
 
 def main():
         
-    # tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
 
     with open(TRAIN_DATA_PATH, "r") as f:
         train_dataset = json.load(f)
@@ -73,9 +72,9 @@ def main():
     trainer.save_model()
 
     eval = trainer.evaluate()
-    file_path = 'evaluate_dict_dpo_16s.json'
+    
 
-    with open(file_path, "w") as json_file:
+    with open(EVAL_JSON_PATH, "w") as json_file:
         json.dump(eval, json_file, indent=4)
 
 
