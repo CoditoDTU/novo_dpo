@@ -22,13 +22,13 @@ TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad"
 
 # GRPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_oxda_1'
+OUTPUT_NAME = 'DPO_protgpt2_oxda_2'
 LOGGING_STEPS = 1
 BETA = 0.1
 LEARNING_RATE = 1e-5
 ADAM_BETAS = (0.9, 0.999) 
 ADAM_EPSILON = 1e-8
-N_TRAIN_EPOCHS = 3
+N_TRAIN_EPOCHS = 1
 ADAM_DECAY = 0.1
 
 # %%
