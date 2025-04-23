@@ -70,7 +70,7 @@ def main():
     training_args = GRPOConfig(output_dir="Protgpt2_test",
                            logging_steps=1,
                            report_to="none",
-                           num_iterations = 10)
+                           num_generations=10)
 
     trainer = GRPOTrainer(
         model="NorseDrunkenSailor/ProtGPT2-with-pad",

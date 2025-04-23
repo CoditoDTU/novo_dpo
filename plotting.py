@@ -1,3 +1,4 @@
+# %%
 import matplotlib.pyplot as  plt
 import pandas as pd
 import numpy as np
@@ -8,10 +9,10 @@ from Bio import SeqIO
 from typing import Dict, List, Tuple, Union
 import math
 
-#JSON_PATH = "data/raw/trainer_state.json"
+JSON_PATH = "data/processed/trainer_state_dpo9.json"
 
-JSON_PATH = os.path.join(os.getcwd(), "protgpt2_test_rgd_1","checkpoint-81", "trainer_state.json")
-PLOT_NAME = "novo_protgpt2_1.pdf"
+#JSON_PATH = os.path.join(os.getcwd(), "protgpt2_test_rgd_1","checkpoint-81", "trainer_state.json")
+PLOT_NAME = "novo_protgpt2_dpo9.pdf"
 
 def extract_training_metrics(data: List[Dict[str, float]]) -> Dict[str, List[float]]:
     """
@@ -127,7 +128,7 @@ def plot_training_metrics_grid(
         plt.show()
 
 
-
+# %%
 
 def main():
     
@@ -137,14 +138,19 @@ def main():
     log_history = logs['log_history']
 
     metrics = extract_training_metrics(data = log_history)
-    metrics_2_plot = ['reward', "loss",'reward_std']
+    metrics_2_plot = [ "loss",'grad_norm']
 
     plot_training_metrics_grid(metrics = metrics,
                       variables_to_plot = metrics_2_plot,
-                      plot_title = "test_plot", 
+                      plot_title = "plot_dpo9", 
                       output_path = f"data/processed/{PLOT_NAME}")
 
 
 
 if __name__ == "__main__":
     main()
+
+
+# %%
+#main()
+# %%

@@ -196,7 +196,7 @@ def reward_hydrophobicity(completions, **kwargs):
 
     rewards = []
     for seq in completions:
-        total = -abs(20 - sum(hydrophobicity.get(aa, 0.0) for aa in seq))
+        total = -abs(4 - sum(hydrophobicity.get(aa, 0.0) for aa in seq))
         rewards.append(total)
     return rewards
  
