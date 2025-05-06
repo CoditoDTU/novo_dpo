@@ -15,7 +15,7 @@ from trl import DPOConfig, DPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import Dataset
 from datasets import DatasetDict
-
+from tqdm.auto import tqdm
 
     
 # INPUT VARIABLES:
@@ -55,7 +55,7 @@ def main():
 
     results = []
 
-    for i, df_train in enumerate(dfs):
+    for i, df_train in enumerate(tqdm(dfs, desc="Processing data partitions")):
         val_indices = [j for j in range(3) if j != i]
         df_valid_1 = dfs[val_indices[0]]
         df_valid_2 = dfs[val_indices[1]]
@@ -73,8 +73,8 @@ def main():
         TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
         
 
-        for _, row in hyp_file.iterrows():
-            print(row)
+        for _, row in tqdm(hyp_file.iterrows(), total=len(hyp_file), desc=f"Partition {i} hyperparameters", leave=False):
+            #print(row)
             epsilon = row['epsilons']
 
             # TRAIN
