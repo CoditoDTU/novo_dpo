@@ -11,8 +11,8 @@ from datasets import DatasetDict
 
 # GRPO Trainer args
 
-TRAIN_FILENAME = 'OXDA_activity_dpo_train.json'
-TEST_FILENAME = 'OXDA_activity_dpo_test.json'
+TRAIN_FILENAME = 'OXDA_activity_dpo_train_16.json'
+TEST_FILENAME = 'OXDA_activity_dpo_test_16.json'
 
 TRAIN_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TRAIN_FILENAME)
 TEST_DATA_PATH = os.path.join(os.getcwd(), "src", "pyutils", TEST_FILENAME)
@@ -21,9 +21,9 @@ MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-p
 TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 
 
-# GRPO config args
+# DPO config args
 
-OUTPUT_NAME = 'DPO_protgpt2_oxda_4'
+OUTPUT_NAME = 'DPO_protgpt2_oxda_logprobstest'
 EVAL_JSON_PATH = os.path.join(os.getcwd(), OUTPUT_NAME,'evaluate_dict_dpo_4.json' )
 LOGGING_STEPS = 1
 BETA = 0.1
@@ -44,7 +44,8 @@ config_dict = {
     'adam_beta2': ADAM_BETAS[1],
     'num_train_epochs': N_TRAIN_EPOCHS,
     'adam_epsilon': ADAM_EPSILON,
-    'weight_decay': ADAM_DECAY
+    'weight_decay': ADAM_DECAY,
+    'precompute_ref_log_probs' : True
 }
 
 
@@ -68,14 +69,23 @@ def main():
                          train_dataset = hf_train_dataset,
                          eval_dataset = hf_test_dataset,
                          processing_class = TOKENIZER)
-    trainer.train()
-    trainer.save_model()
+    
+    trainer.get_train_dataloader()
+    ref_chosen_logps = trainer.train_dataset['ref_chosen_logps']
 
-    eval = trainer.evaluate()
+    print(ref_chosen_logps)
+    #chosen_logps, rejected_logps = trainer.compute_ref_log_probs()
+
+    # raise NotImplementedError
+    # trainer.train()
+    # trainer.save_model()
+
+    # eval = trainer.evaluate()
     
 
-    with open(EVAL_JSON_PATH, "w") as json_file:
-        json.dump(eval, json_file, indent=4)
+    # with open(EVAL_JSON_PATH, "w") as json_file:
+    #     json.dump(eval, json_file, indent=4)
+
 
 
 
