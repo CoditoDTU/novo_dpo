@@ -158,6 +158,8 @@ def main():
                 ).rename(columns={'target_reg': 'rejected_target_reg'}).drop(columns=['sequence'])
 
                 summary_df = pd.concat([chosen_df, rejected_df], axis=1)
+                del val_trainer
+                torch.cuda.empty_cache()
                 return calculate_accuracy(summary_df)
             
 
@@ -180,6 +182,8 @@ def main():
                 'Eval_score_2': ((val_indices[1], accuracy_val_2_epsilon0), (val_indices[1], accuracy_val_2_epsilon)),
                 'N_pairs': N_pairs
             })
+            del trainer
+            torch.cuda.empty_cache()
 
     results_df = pd.DataFrame(results)
             
