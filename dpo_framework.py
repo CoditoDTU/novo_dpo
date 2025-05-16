@@ -15,13 +15,14 @@ from trl import DPOConfig, DPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import Dataset
 from datasets import DatasetDict
-from tqdm.auto import tqdm
+from tqdm.auto import tqdm  
+import csv
 
     
 # INPUT VARIABLES:
 FILENAME = 'gh114.csv' # CSV for traniing and testing models
 PATH = os.path.join(os.getcwd(), 'data','raw', FILENAME) # PATH to file
-
+RESULT_NAME= 'train_df_result_test3.csv'
 
 def get_logps(trainer : DPOTrainer):
     
@@ -46,38 +47,68 @@ def calculate_accuracy(df):
 
 
 def main():
-        #1 Separate DFs
-    df = pd.read_csv(filepath_or_buffer = FILENAME) 
+    #1 Separate DFs
+    df = pd.read_csv(filepath_or_buffer = PATH) 
     df_part0 = df[(df['part_0'] == 1) & (df['part_1'] == 0) & (df['part_2'] == 0)]
     df_part1 = df[(df['part_1'] == 1) & (df['part_0'] == 0) & (df['part_2'] == 0)]
     df_part2 = df[(df['part_2'] == 1) & (df['part_0'] == 0) & (df['part_1'] == 0)]
     dfs = [df_part0, df_part1, df_part2]
 
-    results = []
+    # Load model and tokenizer once at the beginning
+    MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
+    TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
+    OUTPUT_NAME = 'grid_search_gh114_0'
+    LOGGING_STEPS = 1
+    ADAM_BETAS = (0.9, 0.999)
+    ADAM_EPSILON = 1e-8
+    ADAM_DECAY = 0.1
 
-    for i, df_train in enumerate(tqdm(dfs, desc="Processing data partitions")):
+
+    # Initialize results file if it doesn't exist
+    if not os.path.exists(RESULT_NAME):
+        with open(RESULT_NAME, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                'id', 'n_epochs', 'betas', 'epsilon', 'learning_rate', 'P_train',
+                'Eval_score_1', 'Eval_score_2', 'N_pairs'
+            ])
+
+    # Load existing results to check for duplicates
+    processed_combinations = set()
+    if os.path.exists(RESULT_NAME):
+        try:
+            results_df = pd.read_csv(RESULT_NAME)
+            # Create unique identifier combining id and P_train
+            processed_combinations = set(zip(results_df['id'], results_df['P_train']))
+        except:
+            processed_combinations = set()
+
+    for i, df_train in enumerate(dfs):
+        if i == 10:
+            print('process stopped')
+            break 
+
         val_indices = [j for j in range(3) if j != i]
         df_valid_1 = dfs[val_indices[0]]
         df_valid_2 = dfs[val_indices[1]]
-        df_val_merged = pd.concat([df_valid_1, df_valid_2], ignore_index=True).copy() # merged DF to get metric obs
-        df_val_merged_filt = df_val_merged[['sequence',  # Keep only interested columns
-                                            'target_reg']]
-        # Load hyperparameters and model
-        hyp_file = pd.read_csv(filepath_or_buffer='configs/hyperparameter_combinations_small.csv')
-        OUTPUT_NAME = 'grid_test'
-        LOGGING_STEPS = 1
-        ADAM_BETAS = (0.9, 0.999)
-        ADAM_EPSILON = 1e-8
-        ADAM_DECAY = 0.1
-        MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
-        TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
+        df_val_merged = pd.concat([df_valid_1, df_valid_2], ignore_index=True).copy()
+        df_val_merged_filt = df_val_merged[['sequence', 'target_reg']]
+        
+        # Load hyperparameters
+        hyp_file = pd.read_csv(filepath_or_buffer='configs/hyperparameter_combinations_small_id.csv')
+
         
 
-        for _, row in tqdm(hyp_file.iterrows(), total=len(hyp_file), desc=f"Partition {i} hyperparameters", leave=False):
-            #print(row)
+        for _, row in hyp_file.iterrows():
+            current_part = f'part_{i}'
+            # Check if this specific combination (id + part) has already been processed
+            if (row['id'], current_part) in processed_combinations:
+                print(f"Skipping already processed combination - ID: {row['id']}, Part: {current_part}")
+                continue
+
             epsilon = row['epsilons']
 
-            # TRAIN
+            # TRAIN (rest of your training code remains the same)
             df_sorted_train = df_train.sort_values(by='target_reg', ascending=False)
             y_train = df_sorted_train['target_reg'].to_list()
             seq_train = df_sorted_train['sequence'].to_list()
@@ -86,6 +117,7 @@ def main():
             hf_train_dataset = Dataset.from_dict(train_dict)
             N_pairs = len(pairs_train)
 
+            
             # Helper function to generate validation data
             def prepare_validation(df_valid, epsilon_val):
 
@@ -100,11 +132,11 @@ def main():
 
             # VALIDATION 1
             valid_dict_1_e, hf_val1_dataset_e = prepare_validation(df_valid_1, epsilon)
-            valid_dict_1_0, hf_val1_dataset_0 = prepare_validation(df_valid_1, 0)
+            #valid_dict_1_0, hf_val1_dataset_0 = prepare_validation(df_valid_1, 0)
 
             # VALIDATION 2
             valid_dict_2_e, hf_val2_dataset_e = prepare_validation(df_valid_2, epsilon)
-            valid_dict_2_0, hf_val2_dataset_0 = prepare_validation(df_valid_2, 0)
+            #valid_dict_2_0, hf_val2_dataset_0 = prepare_validation(df_valid_2, 0)
 
 
             # Config dict:
@@ -128,15 +160,18 @@ def main():
                                 args=training_args,
                                 train_dataset=hf_train_dataset,
                                 processing_class=TOKENIZER)
-            trainer.train()
             
+            print(f'starting training in part {current_part} row with id {row['id']}')
+            print(f'length of dictionary: {len(train_dict)}')
+            trainer.train()
             # --- GET LOGPS FOR ALL 4 VALIDATION CONFIGS ---
             # Validation logps
-            def compute_logps(valid_dict, hf_dataset):
-                val_trainer = DPOTrainer(model=MODEL,
-                                        args=DPOConfig(**config_dict),
+            def compute_logps(trainer, valid_dict, hf_dataset):
+                val_trainer = DPOTrainer(model=trainer.model,
+                                        args=trainer.args,
                                         train_dataset=hf_dataset,
-                                        processing_class=TOKENIZER)
+                                        processing_class=trainer.processing_class)
+                
                 chosen_logps, rejected_logps = get_logps(val_trainer)
 
                 chosen_df = pd.DataFrame({
@@ -158,37 +193,34 @@ def main():
                 ).rename(columns={'target_reg': 'rejected_target_reg'}).drop(columns=['sequence'])
 
                 summary_df = pd.concat([chosen_df, rejected_df], axis=1)
-                del val_trainer
-                torch.cuda.empty_cache()
                 return calculate_accuracy(summary_df)
             
-
+            print('starting validation')
             # Accuracy for all validations
-            accuracy_val_1_epsilon = compute_logps(valid_dict_1_e, hf_val1_dataset_e)
-            accuracy_val_1_epsilon0 = compute_logps(valid_dict_1_0, hf_val1_dataset_0)
+            print('starting validation 1')
+            accuracy_val_1_epsilon = compute_logps(trainer, valid_dict_1_e, hf_val1_dataset_e)
+            accuracy_val_2_epsilon = compute_logps(trainer, valid_dict_2_e, hf_val2_dataset_e)
 
-            accuracy_val_2_epsilon = compute_logps(valid_dict_2_e, hf_val2_dataset_e)
-            accuracy_val_2_epsilon0 = compute_logps(valid_dict_2_0, hf_val2_dataset_0)
-
-            # --- APPEND RESULTS TO RESULTS ---
-            # Append to results
-            results.append({
-                'n_epochs': row['epochs'],
-                'betas': row['betas'],
-                'epsilon': epsilon,
-                'learning_rate': row['learning_rate'],
-                'P_train': f'part_{i}',
-                'Eval_score_1': ((val_indices[0], accuracy_val_1_epsilon0), (val_indices[0], accuracy_val_1_epsilon)),
-                'Eval_score_2': ((val_indices[1], accuracy_val_2_epsilon0), (val_indices[1], accuracy_val_2_epsilon)),
-                'N_pairs': N_pairs
-            })
-            del trainer
+            # --- WRITE RESULTS TO CSV ---
+            with open(RESULT_NAME, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    row['id'],
+                    row['epochs'],
+                    row['betas'],
+                    epsilon,
+                    row['learning_rate'],
+                    current_part,  # This is f'part_{i}'
+                    float(accuracy_val_1_epsilon),
+                    float(accuracy_val_2_epsilon),
+                    N_pairs
+                ])
+            
+            # Add this combination to the processed set
+            processed_combinations.add((row['id'], current_part))
             torch.cuda.empty_cache()
 
-    results_df = pd.DataFrame(results)
-            
-    results_df.to_csv('train_df_result_small.csv')
-
+        print('DONE UwU')
 
 
 

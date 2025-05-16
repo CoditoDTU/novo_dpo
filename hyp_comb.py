@@ -7,13 +7,13 @@ import random
 import itertools
 
 
-NAME = 'hyperparameter_combinations_small.csv'
+NAME = 'hyperparameter_combinations_0.csv'
 # Parameter combinations
 param_combinations = {
-    'epochs': [1,2,3,4,5],
-    'learning_rate': [1e-6, 1e-5, 1e-4],  # As strings to maintain exact syntax
+    'epochs': [1,2,3,4],
+    'learning_rate': [1e-6,1e-5,1e-4],  # As strings to maintain exact syntax
     'betas': [0.1],
-    'epsilons': [0.3, 0.1] #np.linspace(start = 0, stop = 2, num = 5)
+    'epsilons': [0.3, 0.1, 0.2] #np.linspace(start = 0, stop = 2, num = 5)
     }
 
 # Create output directory
@@ -34,6 +34,7 @@ print(f"Generating {total_combinations} Hydra config files...")
 
 # Convert to DataFrame and save as CSV
 df = pd.DataFrame(combinations, columns=param_names)
+df.insert(0, 'id', range(1, len(df)+1))  # Add ID column starting from 1
 
 csv_path = os.path.join(output_dir, NAME)
 df.to_csv(csv_path, index=False)
