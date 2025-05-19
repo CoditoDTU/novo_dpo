@@ -17,12 +17,15 @@ from datasets import Dataset
 from datasets import DatasetDict
 from tqdm.auto import tqdm  
 import csv
+import torch
+import gc
+
 
     
 # INPUT VARIABLES:
 FILENAME = 'gh114.csv' # CSV for traniing and testing models
 PATH = os.path.join(os.getcwd(), 'data','raw', FILENAME) # PATH to file
-RESULT_NAME= 'train_df_result_test3.csv'
+RESULT_NAME= 'train_df_result_test7.csv'
 
 def get_logps(trainer : DPOTrainer):
     
@@ -41,7 +44,9 @@ def calculate_accuracy(df):
 
     return accuracy
 
-
+def memory_stats():
+    print("memory allocated: ", torch.cuda.memory_allocated()/1024**2)
+    print("memory reserved: ", torch.cuda.memory_reserved()/1024**2)
 
     
 
@@ -49,20 +54,14 @@ def calculate_accuracy(df):
 def main():
     #1 Separate DFs
     df = pd.read_csv(filepath_or_buffer = PATH) 
-    df_part0 = df[(df['part_0'] == 1) & (df['part_1'] == 0) & (df['part_2'] == 0)]
-    df_part1 = df[(df['part_1'] == 1) & (df['part_0'] == 0) & (df['part_2'] == 0)]
-    df_part2 = df[(df['part_2'] == 1) & (df['part_0'] == 0) & (df['part_1'] == 0)]
+    df_part0 = df[(df['part_0'] == 1) & (df['part_1'] == 0) & (df['part_2'] == 0)]#.head(4)
+    df_part1 = df[(df['part_1'] == 1) & (df['part_0'] == 0) & (df['part_2'] == 0)]#.head(4)
+    df_part2 = df[(df['part_2'] == 1) & (df['part_0'] == 0) & (df['part_1'] == 0)]#.head(2)
     dfs = [df_part0, df_part1, df_part2]
 
     # Load model and tokenizer once at the beginning
     MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
     TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
-    OUTPUT_NAME = 'grid_search_gh114_0'
-    LOGGING_STEPS = 1
-    ADAM_BETAS = (0.9, 0.999)
-    ADAM_EPSILON = 1e-8
-    ADAM_DECAY = 0.1
-
 
     # Initialize results file if it doesn't exist
     if not os.path.exists(RESULT_NAME):
@@ -70,7 +69,7 @@ def main():
             writer = csv.writer(f)
             writer.writerow([
                 'id', 'n_epochs', 'betas', 'epsilon', 'learning_rate', 'P_train',
-                'Eval_score_1', 'Eval_score_2', 'N_pairs'
+                'Eval_score_1', 'Eval_score_2', 'N_pairs', 'N_pairs_val_1', 'N_pairs_val_'
             ])
 
     # Load existing results to check for duplicates
@@ -97,7 +96,11 @@ def main():
         # Load hyperparameters
         hyp_file = pd.read_csv(filepath_or_buffer='configs/hyperparameter_combinations_small_id.csv')
 
-        
+        OUTPUT_NAME = 'grid_test'
+        LOGGING_STEPS = 1
+        ADAM_BETAS = (0.9, 0.999)
+        ADAM_EPSILON = 1e-8
+        ADAM_DECAY = 0.1
 
         for _, row in hyp_file.iterrows():
             current_part = f'part_{i}'
@@ -125,17 +128,18 @@ def main():
                 y_valid = df_sorted_valid['target_reg'].to_list()
                 seq_valid = df_sorted_valid['sequence'].to_list()
                 pairs_valid = construct_pairs(Yvec=y_valid, epsilon=epsilon_val)
+                N_pairs_val = len(pairs_valid)
                 valid_dict = format_string_pairs(strings=seq_valid, index_pairs=pairs_valid, N_characters=None)
                 hf_dataset = Dataset.from_dict(valid_dict)
 
-                return valid_dict, hf_dataset
+                return valid_dict, hf_dataset, N_pairs_val
 
             # VALIDATION 1
-            valid_dict_1_e, hf_val1_dataset_e = prepare_validation(df_valid_1, epsilon)
+            valid_dict_1_e, hf_val1_dataset_e, N_pairs_val_1 = prepare_validation(df_valid_1, epsilon)
             #valid_dict_1_0, hf_val1_dataset_0 = prepare_validation(df_valid_1, 0)
 
             # VALIDATION 2
-            valid_dict_2_e, hf_val2_dataset_e = prepare_validation(df_valid_2, epsilon)
+            valid_dict_2_e, hf_val2_dataset_e, N_pairs_val_2 = prepare_validation(df_valid_2, epsilon)
             #valid_dict_2_0, hf_val2_dataset_0 = prepare_validation(df_valid_2, 0)
 
 
@@ -151,7 +155,8 @@ def main():
                 'adam_epsilon': ADAM_EPSILON,
                 'weight_decay': ADAM_DECAY,
                 'precompute_ref_log_probs' : True,
-                'report_to': 'none'
+                'report_to': 'none',
+                'auto_find_batch_size' : True
             }
             
             # Train model
@@ -213,14 +218,23 @@ def main():
                     current_part,  # This is f'part_{i}'
                     float(accuracy_val_1_epsilon),
                     float(accuracy_val_2_epsilon),
-                    N_pairs
+                    N_pairs,
+                    N_pairs_val_1,
+                    N_pairs_val_2
                 ])
             
             # Add this combination to the processed set
             processed_combinations.add((row['id'], current_part))
+            
+            #print('\nMemory stats before release:',memory_stats())
+
+            del trainer
+            #  del model
+            gc.collect()
             torch.cuda.empty_cache()
 
-        print('DONE UwU')
+            #print('\nMemory stats after release:',memory_stats())
+    print('DONE UwU')
 
 
 
