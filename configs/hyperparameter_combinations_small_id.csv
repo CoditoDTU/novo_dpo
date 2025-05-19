@@ -1,0 +1,3 @@
+id,epochs,learning_rate,betas,epsilons
+1,1,1e-06,0.1,0.3
+2,1,1e-06,0.1,0.1
