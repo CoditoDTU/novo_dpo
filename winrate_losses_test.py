@@ -20,12 +20,19 @@ import csv
 import torch
 import gc
 import argparse
-
+# --- ADDED IMPORTS FOR PLOTTING ---
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 # INPUT VARIABLES:
-FILENAME = 'gh114.csv' # CSV for training and testing models
-PATH = os.path.join(os.getcwd(), 'data', 'raw', FILENAME) # PATH to file
-RESULT_NAME = 'winrate_losses_exp_0.csv' # MODIFIED: New result file name
+# N_RUN = 0 
+# FILENAME = 'gh114.csv' # CSV for training and testing models
+# PATH = os.path.join(os.getcwd(), 'data', 'raw', FILENAME) # PATH to file
+# PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
+# RESULT_NAME = os.path.join(os.getcwd(),PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}.csv') # MODIFIED: New result file name
+# PLOT_FILENAME = os.path.join(os.getcwd(),PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}_barplot.pdf')
+
+
 
 
 def calculate_winrate(df):
@@ -128,9 +135,62 @@ def format_string_pairs_e(strings, index_pairs, pair_diffs, N_characters):
 
     return result
 
+# --- PLOTTING FUNCTION (to be run at the end) ---
+def create_barplot(file_path, plot_path):
+    """
+    Reads experiment results and creates a bar plot of winrates.
+    """
+    if not os.path.exists(file_path):
+        print(f"❌ Error: Results file not found at '{file_path}'")
+        return
+    df = pd.read_csv(file_path)
+    print("\n--- 📊 Creating Final Plot 📊 ---")
+    print("Loaded results data for plotting:")
+    print(df.head())
 
+    sns.set_theme(style="whitegrid")
+    plt.figure(figsize=(12, 8))
+    barplot = sns.barplot(
+        data=df,
+        x='loss_type',
+        y='winrate',
+        hue='dataset_name',
+        errorbar='sd',
+        capsize=.05,
+        palette='viridis'
+    )
+    sns.stripplot(
+        data=df,
+        x='loss_type',
+        y='winrate',
+        hue='dataset_name',
+        palette='dark:red',
+        jitter=True,
+        dodge=True,
+        alpha=0.9,
+        linewidth=1,
+        edgecolor='black',
+        ax=barplot
+    )
 
-def main():
+    plt.title('Mean Winrate by Loss Type with Standard Deviation', fontsize=16, weight='bold')
+    plt.xlabel('Loss Type', fontsize=12)
+    plt.ylabel('Mean Winrate', fontsize=12)
+    min_val = df['winrate'].min()
+    max_val = df['winrate'].max()
+    plt.ylim(bottom=min_val * 0.95, top=max_val * 1.05)
+    
+    handles, labels = barplot.get_legend_handles_labels()
+    num_datasets = df['dataset_name'].nunique()
+    plt.legend(handles[:num_datasets], labels[:num_datasets], title='Dataset Name', loc='upper right')
+
+    plt.tight_layout()
+    # Save the plot to the specified path
+    plt.savefig(plot_path, format='pdf', dpi=300)
+    print(f"\n✅ Successfully saved the plot as '{plot_path}'")
+    plt.show()
+
+def main(N_RUN):
 
     # --- 2. SET UP ARGUMENT PARSER ---
     parser = argparse.ArgumentParser(description="Run DPO fine-tuning with an optional dry run.")
@@ -146,7 +206,18 @@ def main():
         help='If set, prints the experiment plan before running each training step.'
     )
     args = parser.parse_args()
-    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', 'run_0')
+
+    # --- CORRECTED PATH DEFINITIONS ---
+    FILENAME = 'gh114.csv'
+    DATA_PATH = os.path.join(os.getcwd(), 'data', 'raw', FILENAME)
+    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
+    RESULT_NAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}.csv')
+    PLOT_FILENAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}_barplot.pdf')
+
+    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
+    # --- CREATE THE OUTPUT DIRECTORY ---
+    os.makedirs(PARENT_OUTPUT_DIR, exist_ok=True)
+
     if args.dry_run:
         print("--- 🧪 EXECUTING IN DRY RUN MODE 🧪 ---")
         print("No models will be trained. The script will outline the planned experiments.")
@@ -162,7 +233,7 @@ def main():
 
     # 1. Separate DFs for 3-fold cross-validation
     
-    df = pd.read_csv(filepath_or_buffer = PATH) 
+    df = pd.read_csv(filepath_or_buffer = DATA_PATH) 
 
     df_part0 = df[(df['part_0'] == 1) & (df['part_1'] == 0) & (df['part_2'] == 0)]
     df_part1 = df[(df['part_1'] == 1) & (df['part_0'] == 0) & (df['part_2'] == 0)]
@@ -208,8 +279,8 @@ def main():
        
         # 4. FIXED HYPERPARAMETERS (previously from iterrows)
         N_EPOCHS = 1 # Formerly row['epochs']
-        BETA = 0.01 # Formerly row['betas']
-        LEARNING_RATE = 1e-7 # Formerly row['learning_rate']
+        BETA = 1 # Formerly row['betas']
+        LEARNING_RATE = 1e-5 # Formerly row['learning_rate']
         EPSILON = 0 # Formerly row['epsilons']  # Epsilon for constructing preference pairs
         LOGGING_STEPS = 2
         ADAM_BETAS = (0.9, 0.999)
@@ -260,9 +331,7 @@ def main():
                 print(f"  - Num Validation Pairs (epsilon=0): {len(pairs_valid)}")
                 print(f"  - Hyperparameters: N_EPOCHS={N_EPOCHS}, BETA={BETA}, LR={LEARNING_RATE}")
                 # --- ADDED: Show the specific path for the summary dataframe ---
-                print(f"  - Summary DF Name:        {summary_filename}")
-                continue # Skip to the next iteration without training
-            
+                print(f"  - Summary DF Name:        {summary_filename}")            
             if args.dry_run:
                 continue
 
@@ -307,7 +376,7 @@ def main():
                 model=trainer.model,
                 args=trainer.args,
                 train_dataset=hf_val_dataset, # Use the unified validation dataset
-                tokenizer=trainer.tokenizer
+                processing_class=trainer.tokenizer
             )
 
             chosen_logps, rejected_logps = get_logps(val_trainer)
@@ -347,7 +416,14 @@ def main():
     print('DONE OwO/')
     if args.dry_run or args.log_plan:
          print(f"\n--- ✅ {('Dry run' if args.dry_run else 'Verbose run')} complete. ---")
+        # --- FINAL PLOTTING STEP ---
+    # This block will now only be reached if it's NOT a dry run.
+    if not args.dry_run:
+        # Check if a results file was created before trying to plot
+        if os.path.exists(RESULT_NAME):
+            create_barplot(RESULT_NAME, PLOT_FILENAME)
 
 
 if __name__ == "__main__":
-    main()
+    N_RUN = 0 
+    main(N_RUN)
