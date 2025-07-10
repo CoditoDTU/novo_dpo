@@ -3,3 +3,5 @@ outputs/
 *.pyc
 data_wrangling.ipynb
 .venv/
+mlruns/
+test_wdpo/

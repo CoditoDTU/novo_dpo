@@ -1,0 +1,3 @@
+id,loss_type,dataset
+1,sigmoid,gh114.csv
+2,w_sigmoid,gh114.csv
