@@ -1,0 +1,15 @@
+id,loss_type,dataset
+1,sigmoid,gh114.csv
+2,w_sigmoid,gh114.csv
+3,hinge,gh114.csv
+4,ipo,gh114.csv
+5,exo_pair,gh114.csv
+6,nca_pair,gh114.csv
+7,robust,gh114.csv
+8,bco_pair,gh114.csv
+9,sppo_hard,gh114.csv
+10,aot,gh114.csv
+11,aot_pair,gh114.csv
+12,discopop,gh114.csv
+13,apo_zero,gh114.csv
+14,apo_down,gh114.csv

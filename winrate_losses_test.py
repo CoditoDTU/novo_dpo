@@ -213,7 +213,7 @@ def main(N_RUN):
     PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
     RESULT_NAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}.csv')
     PLOT_FILENAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}_barplot.pdf')
-
+    HYP_FILE = 'configs/winrate_loss_plot_combinations_1.csv'
     PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
     # --- CREATE THE OUTPUT DIRECTORY ---
     os.makedirs(PARENT_OUTPUT_DIR, exist_ok=True)
@@ -275,7 +275,7 @@ def main(N_RUN):
         df_val_merged_filt = df_valid_merged[['sequence', 'target_reg']]
         
         # 3. Load hyperparameters file (now contains dataset_name and loss_type)
-        hyp_file = pd.read_csv(filepath_or_buffer='configs/winrate_loss_plot_combinations.csv')
+        hyp_file = pd.read_csv(filepath_or_buffer=HYP_FILE)
        
         # 4. FIXED HYPERPARAMETERS (previously from iterrows)
         N_EPOCHS = 1 # Formerly row['epochs']
@@ -376,7 +376,7 @@ def main(N_RUN):
                 model=trainer.model,
                 args=trainer.args,
                 train_dataset=hf_val_dataset, # Use the unified validation dataset
-                processing_class=trainer.tokenizer
+                processing_class=trainer.processing_class
             )
 
             chosen_logps, rejected_logps = get_logps(val_trainer)
@@ -425,5 +425,5 @@ def main(N_RUN):
 
 
 if __name__ == "__main__":
-    N_RUN = 0 
+    N_RUN = 4 
     main(N_RUN)
