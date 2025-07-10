@@ -140,14 +140,17 @@ def main():
         help='If set, prints experiment configurations without running training.'
     )
     args = parser.parse_args()
-
+    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', 'run_0')
     if args.dry_run:
         print("--- 🧪 EXECUTING IN DRY RUN MODE 🧪 ---")
         print("No models will be trained. The script will outline the planned experiments.")
+        # --- ADDED: Show where main results and summaries will be saved ---
+        print(f"\nMain results will be logged to: '{RESULT_NAME}'")
+        print(f"Validation summary DataFrames will be saved in: '{os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')}'")
 
 
     # 1. Separate DFs for 3-fold cross-validation
-    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', 'run_0')
+    
     df = pd.read_csv(filepath_or_buffer = PATH) 
 
     df_part0 = df[(df['part_0'] == 1) & (df['part_1'] == 0) & (df['part_2'] == 0)]
@@ -230,6 +233,11 @@ def main():
             valid_dict = format_string_pairs_e(strings=seq_valid, index_pairs=pairs_valid, N_characters=None, pair_diffs = pairs_valid_diff)
             hf_val_dataset = Dataset.from_dict(valid_dict)
 
+            # --- ADDED: Define summary path here so it's available for the dry run printout ---
+            summary_filename = f"summary_{dataset_name}_{loss_type}_{current_part}.csv"
+            validation_results_dir = os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')
+            summary_filepath = os.path.join(validation_results_dir, summary_filename)
+
             # --- 4. HANDLE DRY RUN ---
             if args.dry_run:
                 print("\n-------------------------------------------------")
@@ -240,6 +248,8 @@ def main():
                 print(f"  - Num Train Pairs (epsilon={EPSILON}): {len(pairs_train)}")
                 print(f"  - Num Validation Pairs (epsilon=0): {len(pairs_valid)}")
                 print(f"  - Hyperparameters: N_EPOCHS={N_EPOCHS}, BETA={BETA}, LR={LEARNING_RATE}")
+                # --- ADDED: Show the specific path for the summary dataframe ---
+                print(f"  - Summary DF Name:        {summary_filename}")
                 continue # Skip to the next iteration without training
 
 
@@ -297,10 +307,7 @@ def main():
             summary_df = pd.concat([chosen_df, rejected_df], axis=1)
 
             # --- LINE YOU REQUESTED TO ADD, with logic to create the directory ---
-            summary_filename = f"summary_{dataset_name}_{loss_type}_{current_part}.csv"
-            validation_results_dir = os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')
             os.makedirs(validation_results_dir, exist_ok=True)
-            summary_filepath = os.path.join(validation_results_dir, summary_filename)
             summary_df.to_csv(summary_filepath, index=False)
 
             winrate = calculate_winrate(summary_df)
