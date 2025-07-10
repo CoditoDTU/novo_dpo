@@ -139,12 +139,23 @@ def main():
         action='store_true',
         help='If set, prints experiment configurations without running training.'
     )
+    # --- ADDED: New argument for verbose logging ---
+    parser.add_argument(
+        '--log-plan',
+        action='store_true',
+        help='If set, prints the experiment plan before running each training step.'
+    )
     args = parser.parse_args()
     PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', 'run_0')
     if args.dry_run:
         print("--- 🧪 EXECUTING IN DRY RUN MODE 🧪 ---")
         print("No models will be trained. The script will outline the planned experiments.")
         # --- ADDED: Show where main results and summaries will be saved ---
+        print(f"\nMain results will be logged to: '{RESULT_NAME}'")
+        print(f"Validation summary DataFrames will be saved in: '{os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')}'")
+    elif args.log_plan:
+        print("--- 📋 EXECUTING IN VERBOSE MODE 📋 ---")
+        print("The plan for each experiment will be printed before it runs.")
         print(f"\nMain results will be logged to: '{RESULT_NAME}'")
         print(f"Validation summary DataFrames will be saved in: '{os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')}'")
 
@@ -239,7 +250,7 @@ def main():
             summary_filepath = os.path.join(validation_results_dir, summary_filename)
 
             # --- 4. HANDLE DRY RUN ---
-            if args.dry_run:
+            if args.dry_run or args.log_plan:
                 print("\n-------------------------------------------------")
                 print(f"▶️ Experiment Plan:")
                 print(f"  - Training Fold: {current_part}")
@@ -251,7 +262,9 @@ def main():
                 # --- ADDED: Show the specific path for the summary dataframe ---
                 print(f"  - Summary DF Name:        {summary_filename}")
                 continue # Skip to the next iteration without training
-
+            
+            if args.dry_run:
+                continue
 
 
 
@@ -332,8 +345,9 @@ def main():
             gc.collect()
             torch.cuda.empty_cache()
     print('DONE OwO/')
-    if args.dry_run:
-        print("\n--- ✅ Dry run complete. ---")
+    if args.dry_run or args.log_plan:
+         print(f"\n--- ✅ {('Dry run' if args.dry_run else 'Verbose run')} complete. ---")
+
 
 if __name__ == "__main__":
     main()
