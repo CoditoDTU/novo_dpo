@@ -3926,7 +3926,7 @@ vlm = ["Pillow"]
 type = "git"
 url = "https://github.com/CoditoDTU/trl"
 reference = "main"
-resolved_reference = "c82de8fee32bf221c29ca37cbce456439a5dbbf1"
+resolved_reference = "58d39a4ed34762ad7cfb2d54297dacd0c55464e8"
 
 [[package]]
 name = "typing-extensions"
