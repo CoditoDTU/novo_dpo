@@ -217,7 +217,9 @@ def main_dpo_training_and_eval(args):
     """
     # --- Configuration & Plan Display ---
     PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'gh114_family_logps', f'run_{args.nexp}_{args.loss_type}')
-
+    ADAM_BETAS = (0.9, 0.999)
+    ADAM_EPSILON = 1e-8
+    ADAM_DECAY = 0.1
     # If --dry_run or --show_plan is used, display the configuration.
     if args.dry_run or args.show_plan:
         print_experiment_plan(args, PARENT_OUTPUT_DIR)
@@ -280,17 +282,25 @@ def main_dpo_training_and_eval(args):
             continue
 
         model_output_dir = os.path.join(PARENT_OUTPUT_DIR, f"fold_{partition_name}")
-        training_args = DPOConfig(
-            output_dir=model_output_dir,
-            num_train_epochs=args.n_epochs,
-            beta=args.beta,
-            learning_rate=args.learning_rate,
-            loss_type=args.loss_type,
-            logging_steps=2,
-            precompute_ref_log_probs=True,
-            report_to='none',
-            auto_find_batch_size=True,
-        )
+
+        config_dict = {
+                'output_dir': model_output_dir,
+                'logging_steps': 2,
+                'beta': args.beta,
+                'learning_rate': args.learning_rate,
+                'num_train_epochs': args.n_epochs,
+                'adam_beta1': ADAM_BETAS[0],
+                'adam_beta2': ADAM_BETAS[1],
+                'adam_epsilon': ADAM_EPSILON,
+                'weight_decay': ADAM_DECAY,
+                'precompute_ref_log_probs': True,
+                'report_to': 'none',
+                'auto_find_batch_size': True,
+                'loss_type': args.loss_type,
+            }
+        training_args = DPOConfig(**config_dict)
+ 
+
         trainer = DPOTrainer(
             model=model, args=training_args, train_dataset=hf_train_dataset,
             # Per user request, this line is not modified
