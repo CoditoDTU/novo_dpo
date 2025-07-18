@@ -303,40 +303,55 @@ def main_dpo_training_and_eval():
     print("Preview of the final merged DataFrame:")
     print(df_final.head())
 
-    # --- Step 5: Generate and Display Plot ---
+    
+    # --- Step 5: Generate and Display Plot (MODIFIED) ---
     print("\n--- Generating final plot ---")
     if df_final.empty or METRIC_COLUMN not in df_final.columns:
         print("Skipping plotting because the DataFrame is invalid.")
         return
 
-    logp_cols = ['logps_reference'] + [col for col in df_final.columns if 'logps_policy_fold' in col]
-    colors = ['#d62728', '#1f77b4', '#ff7f0e', '#2ca02c']
-    labels = ['Reference'] + [f'Policy Fold {i}' for i in range(len(logp_cols) - 1)]
+    # Find all policy logp columns to plot their difference from reference
+    policy_logp_cols = [col for col in df_final.columns if 'logps_policy_fold' in col]
+    
+    if 'logps_reference' not in df_final.columns:
+        print("Skipping plot: 'logps_reference' column is needed to calculate the difference.")
+        return
+
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    labels = [f'Policy Fold {i}' for i in range(len(policy_logp_cols))]
 
     fig, ax = plt.subplots(figsize=(12, 8))
 
-    for i, logp_col in enumerate(logp_cols):
-        if logp_col in df_final:
+    # Plot the difference for each policy fold against the metric value
+    for i, policy_col in enumerate(policy_logp_cols):
+        if policy_col in df_final:
+            # Calculate the difference: policy_logp - reference_logp
+            logp_difference = df_final[policy_col] - df_final['logps_reference']
+            
             ax.scatter(
-                df_final[logp_col],
-                df_final[METRIC_COLUMN],
+                df_final[METRIC_COLUMN],  # X-axis: your metric ('target_reg')
+                logp_difference,          # Y-axis: the difference in log probabilities
                 color=colors[i % len(colors)],
                 alpha=0.6,
                 s=20,
                 label=labels[i]
             )
+            
+    # Add a horizontal line at y=0 for a clear baseline
+    ax.axhline(0, color='black', linestyle='--', linewidth=1.5, label='Reference Baseline (No Change)')
 
-    ax.set_title(f'{METRIC_COLUMN} vs. Log Probabilities ({loss_type.capitalize()} Loss)')
-    ax.set_xlabel("Log Probability")
-    ax.set_ylabel(f"Metric Value ({METRIC_COLUMN})")
+    ax.set_title(f'Logp Difference vs. {METRIC_COLUMN} ({loss_type.capitalize()} Loss)')
+    ax.set_xlabel(f"Metric Value ({METRIC_COLUMN})")
+    ax.set_ylabel("Log Probability Difference (Policy - Reference)")
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.legend()
     plt.tight_layout()
 
-    # Save the plot to a file
-    plot_output_path = os.path.join(PARENT_OUTPUT_DIR, f'final_plot_{loss_type}_{nexp}.png')
+    # Save the plot to a new file to avoid overwriting
+    plot_output_path = os.path.join(PARENT_OUTPUT_DIR, f'final_plot_difference_{loss_type}_{nexp}.png')
     plt.savefig(plot_output_path)
     print(f"Plot saved to: {plot_output_path}")
+
 
  
 if __name__ == '__main__':
