@@ -19,6 +19,7 @@ from tqdm.auto import tqdm
 import csv
 import torch
 import gc
+from scipy.stats import pearsonr, spearmanr, kendalltau # Added for correlation
  
  
 nexp = 1
@@ -303,54 +304,73 @@ def main_dpo_training_and_eval():
     print("Preview of the final merged DataFrame:")
     print(df_final.head())
 
+    # --- Step 5: Generate Scatter Plot with Integrated Correlations (MODIFIED) ---
     
-    # --- Step 5: Generate and Display Plot (MODIFIED) ---
-    print("\n--- Generating final plot ---")
-    if df_final.empty or METRIC_COLUMN not in df_final.columns:
-        print("Skipping plotting because the DataFrame is invalid.")
-        return
-
-    # Find all policy logp columns to plot their difference from reference
+    print("\n--- Generating final scatter plot with correlations ---")
     policy_logp_cols = [col for col in df_final.columns if 'logps_policy_fold' in col]
+    correlation_results = []
     
+    # Setup the plot
+    fig, ax = plt.subplots(figsize=(14, 9))
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+
     if 'logps_reference' not in df_final.columns:
-        print("Skipping plot: 'logps_reference' column is needed to calculate the difference.")
-        return
+        print("Skipping plot: 'logps_reference' column is needed.")
+    else:
+        # Loop through folds to calculate correlations and plot
+        for i, policy_col in enumerate(policy_logp_cols):
+            if policy_col in df_final:
+                # Calculate Logp Difference
+                logp_difference = df_final[policy_col] - df_final['logps_reference']
+                metric_values = df_final[METRIC_COLUMN]
+                
+                # Calculate Correlations for the current fold
+                valid_data = pd.DataFrame({'diff': logp_difference, 'metric': metric_values}).dropna()
+                if len(valid_data) < 2:
+                    pearson_c, spearman_c, kendall_c = 0, 0, 0
+                else:
+                    pearson_c, _ = pearsonr(valid_data['diff'], valid_data['metric'])
+                    spearman_c, _ = spearmanr(valid_data['diff'], valid_data['metric'])
+                    kendall_c, _ = kendalltau(valid_data['diff'], valid_data['metric'])
+                
+                correlation_results.append({
+                    'Fold': f'Policy Fold {i}', 'Pearson': pearson_c,
+                    'Spearman': spearman_c, 'KendallTau': kendall_c
+                })
+                
+                # Create the formatted label for the legend
+                legend_label = (f'Policy Fold {i}\n'
+                                f'  Pearson: {pearson_c:.3f}\n'
+                                f'  Spearman: {spearman_c:.3f}\n'
+                                f'  Kendall-Tau: {kendall_c:.3f}')
 
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
-    labels = [f'Policy Fold {i}' for i in range(len(policy_logp_cols))]
+                # Plot the scatter points with the new label
+                ax.scatter(metric_values, logp_difference, color=colors[i % len(colors)],
+                           alpha=0.6, s=25, label=legend_label)
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+        # Print correlation results table to console
+        if correlation_results:
+            df_corr = pd.DataFrame(correlation_results)
+            print("\nCorrelation Coefficients (Logp Difference vs. Metric):")
+            print(df_corr.to_string(index=False))
 
-    # Plot the difference for each policy fold against the metric value
-    for i, policy_col in enumerate(policy_logp_cols):
-        if policy_col in df_final:
-            # Calculate the difference: policy_logp - reference_logp
-            logp_difference = df_final[policy_col] - df_final['logps_reference']
-            
-            ax.scatter(
-                df_final[METRIC_COLUMN],  # X-axis: your metric ('target_reg')
-                logp_difference,          # Y-axis: the difference in log probabilities
-                color=colors[i % len(colors)],
-                alpha=0.6,
-                s=20,
-                label=labels[i]
-            )
-            
-    # Add a horizontal line at y=0 for a clear baseline
-    ax.axhline(0, color='black', linestyle='--', linewidth=1.5, label='Reference Baseline (No Change)')
-
-    ax.set_title(f'Logp Difference vs. {METRIC_COLUMN} ({loss_type.capitalize()} Loss)')
-    ax.set_xlabel(f"Metric Value ({METRIC_COLUMN})")
-    ax.set_ylabel("Log Probability Difference (Policy - Reference)")
-    ax.grid(True, linestyle='--', alpha=0.5)
-    ax.legend()
-    plt.tight_layout()
-
-    # Save the plot to a new file to avoid overwriting
-    plot_output_path = os.path.join(PARENT_OUTPUT_DIR, f'final_plot_difference_{loss_type}_{nexp}.png')
-    plt.savefig(plot_output_path)
-    print(f"Plot saved to: {plot_output_path}")
+        # Finalize Plot
+        ax.axhline(0, color='black', linestyle='--', linewidth=1.5, label='Reference Baseline')
+        ax.set_title(f'Logp Difference vs. {METRIC_COLUMN} with Correlations')
+        ax.set_xlabel(f"Metric Value ({METRIC_COLUMN})")
+        ax.set_ylabel("Log Probability Difference (Policy - Reference)")
+        ax.grid(True, linestyle='--', alpha=0.5)
+        
+        # Place legend outside of the plot to avoid overlap
+        ax.legend(title='Correlations per Fold', bbox_to_anchor=(1.04, 1), loc="upper left",
+                  fontsize='small', title_fontsize='medium')
+        
+        # Adjust layout to make room for the legend
+        fig.tight_layout(rect=[0, 0, 0.8, 1])
+        
+        plot_output_path = os.path.join(PARENT_OUTPUT_DIR, f'final_plot_scatter_with_corr_{loss_type}_{nexp}.png')
+        plt.savefig(plot_output_path, bbox_inches='tight') # Use bbox_inches to ensure legend is saved
+        print(f"\nScatter plot with correlations saved to: {plot_output_path}")
 
 
  
