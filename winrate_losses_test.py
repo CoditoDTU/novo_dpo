@@ -213,7 +213,7 @@ def main(N_RUN):
     PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
     RESULT_NAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}.csv')
     PLOT_FILENAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}_barplot.pdf')
-    HYP_FILE = 'configs/winrate_loss_plot_combinations_1.csv'
+    HYP_FILE = 'configs/winrate_loss_plot_combinations_2.csv'
     PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
     # --- CREATE THE OUTPUT DIRECTORY ---
     os.makedirs(PARENT_OUTPUT_DIR, exist_ok=True)
@@ -240,8 +240,7 @@ def main(N_RUN):
     df_part2 = df[(df['part_2'] == 1) & (df['part_0'] == 0) & (df['part_1'] == 0)]
     dfs = [df_part0, df_part1, df_part2]
 
-    # Load model and tokenizer once
-    MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
+    
     TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
 
     # 2. Initialize new results file if it doesn't exist
@@ -267,6 +266,8 @@ def main(N_RUN):
 
     # --- Cross-validation loop ---
     for i, df_train in enumerate(dfs):
+
+        MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
         # Create a single merged validation set from the other two partitions
         val_indices = [j for j in range(len(dfs)) if j != i]
         df_valid_merged = pd.concat([dfs[val_indices[0]], dfs[val_indices[1]]], ignore_index=True).copy()
@@ -279,7 +280,7 @@ def main(N_RUN):
        
         # 4. FIXED HYPERPARAMETERS (previously from iterrows)
         N_EPOCHS = 1 # Formerly row['epochs']
-        BETA = 1 # Formerly row['betas']
+        BETA = 0.01 # Formerly row['betas']
         LEARNING_RATE = 1e-5 # Formerly row['learning_rate']
         EPSILON = 0 # Formerly row['epsilons']  # Epsilon for constructing preference pairs
         LOGGING_STEPS = 2
@@ -410,9 +411,10 @@ def main(N_RUN):
             processed_combinations.add((dataset_name, loss_type, current_part))
 
             del trainer
-            #  del model
+            del MODEL
             gc.collect()
             torch.cuda.empty_cache()
+
     print('DONE OwO/')
     if args.dry_run or args.log_plan:
          print(f"\n--- ✅ {('Dry run' if args.dry_run else 'Verbose run')} complete. ---")
@@ -425,5 +427,5 @@ def main(N_RUN):
 
 
 if __name__ == "__main__":
-    N_RUN = 4 
+    N_RUN = 7 
     main(N_RUN)
