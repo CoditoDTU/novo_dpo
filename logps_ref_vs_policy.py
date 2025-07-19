@@ -358,7 +358,7 @@ def main_dpo_training_and_eval(args):
 
         # Finalize Plot
         ax.axhline(0, color='black', linestyle='--', linewidth=1.5, label='Reference Baseline')
-        ax.set_title(f'Logp Difference vs. {METRIC_COLUMN} with Correlations')
+        ax.set_title(f'Logp Difference vs. {METRIC_COLUMN} with Correlations -- {OUTPUT_NAME} dataset - {loss_type} loss')
         ax.set_xlabel(f"Metric Value ({METRIC_COLUMN})")
         ax.set_ylabel("Log Probability Difference (Policy - Reference)")
         ax.grid(True, linestyle='--', alpha=0.5)
