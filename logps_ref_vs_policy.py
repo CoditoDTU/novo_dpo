@@ -370,7 +370,7 @@ def main_dpo_training_and_eval(args):
         # Adjust layout to make room for the legend
         fig.tight_layout(rect=[0, 0, 0.8, 1])
         
-        plot_output_path = os.path.join(PARENT_OUTPUT_DIR, f'final_plot_scatter_with_corr_{loss_type}_{nexp}.png')
+        plot_output_path = os.path.join(PARENT_OUTPUT_DIR, f'final_plot{OUTPUT_NAME}_scatter_with_corr_{loss_type}_{nexp}.png')
         plt.savefig(plot_output_path, bbox_inches='tight') # Use bbox_inches to ensure legend is saved
         print(f"\nScatter plot with correlations saved to: {plot_output_path}")
 
@@ -383,7 +383,7 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='gh114.csv', help='Path to the training data CSV file.')
     parser.add_argument('--loss', type=str, default='sigmoid', help='loss types: sigmoid, w_sigmoid, w_sigmoid_2')
     parser.add_argument('--nexp', type=int, default=0, help='number of experiment')
-    parser.add_argument('--eps', type=int, default=0, help='epsilon values to reduce training pairs (gh114 0.01, cm 0.1-0.2, ppat 1-2 )')
+    parser.add_argument('--eps', type=float, default=0, help='epsilon values to reduce training pairs (gh114 0.01, cm 0.1-0.2, ppat 1-2 )')
     args = parser.parse_args()
 
     main_dpo_training_and_eval(args)
