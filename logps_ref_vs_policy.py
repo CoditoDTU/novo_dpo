@@ -20,10 +20,9 @@ import csv
 import torch
 import gc
 from scipy.stats import pearsonr, spearmanr, kendalltau # Added for correlation
+import argparse
  
- 
-nexp = 1
-loss_type = 'w_sigmoid'
+
 METRIC_COLUMN = 'target_reg'
 # --- Log Probability Calculation Function ---
  
@@ -172,21 +171,24 @@ def prepare_dataset(df_prep, epsilon_prep):
     return Dataset.from_dict(data_dict), len(index_pairs)
 
  
-def main_dpo_training_and_eval():
+def main_dpo_training_and_eval(args):
     """
     Trains DPO models and evaluates them by calculating policy logps.
     """
     # --- Configuration ---
-    OUTPUT_NAME = 'logps_test_gh114'
-    DATA_PATH = 'gh114.csv'
+
+    nexp = args.nexp
+    loss_type = args.loss
+    DATA_PATH = args.data
+    OUTPUT_NAME = os.path.splitext(DATA_PATH)[0]
     BASE_MODEL_NAME = "NorseDrunkenSailor/ProtGPT2-with-pad"
-    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_logps', f'run_{nexp}_{loss_type}')
+    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_logps',OUTPUT_NAME, f'run_{nexp}_{loss_type}')
  
     # Fixed Hyperparameters
     N_EPOCHS = 1
     BETA = 0.01
     LEARNING_RATE = 1e-5
-    EPSILON = 0.01 #75  # Epsilon for constructing preference pairs
+    EPSILON = args.eps #75  # Epsilon for constructing preference pairs
  
     # Model and Training Configuration
     LOGGING_STEPS = 2
@@ -375,5 +377,13 @@ def main_dpo_training_and_eval():
 
  
 if __name__ == '__main__':
-   
-    main_dpo_training_and_eval()
+
+    parser = argparse.ArgumentParser(description="Run DPO training and evaluate log probabilities on a FASTA file.")
+    # --- File Path Arguments ---
+    parser.add_argument('--data', type=str, default='gh114.csv', help='Path to the training data CSV file.')
+    parser.add_argument('--loss', type=str, default='sigmoid', help='loss types: sigmoid, w_sigmoid, w_sigmoid_2')
+    parser.add_argument('--nexp', type=int, default=0, help='number of experiment')
+    parser.add_argument('--eps', type=int, default=0, help='epsilon values to reduce training pairs (gh114 0.01, cm 0.1-0.2, ppat 1-2 )')
+    args = parser.parse_args()
+
+    main_dpo_training_and_eval(args)
