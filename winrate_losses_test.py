@@ -205,12 +205,27 @@ def main(N_RUN):
         action='store_true',
         help='If set, prints the experiment plan before running each training step.'
     )
+
+    # --- ADDED: New argument for the dataset name ---
+    parser.add_argument(
+        '--dataset-name',
+        type=str,
+        default='gh114.csv',
+        help='The name of the dataset CSV file to use from the "data/raw" directory.'
+    )
+    # --- ADDED: New argument for the epsilon value ---
+    parser.add_argument(
+        '--epsilon',
+        type=float,
+        default=0.0,
+        help='The epsilon threshold for constructing training preference pairs.'
+    )
     args = parser.parse_args()
 
     # --- CORRECTED PATH DEFINITIONS ---
-    FILENAME = 'gh114.csv'
+    FILENAME = args.dataset_name 
     DATA_PATH = os.path.join(os.getcwd(), 'data', 'raw', FILENAME)
-    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
+    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), FILENAME,'DPO_loss_winrate_exp', f'run_{N_RUN}')
     RESULT_NAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}.csv')
     PLOT_FILENAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}_barplot.pdf')
     HYP_FILE = 'configs/winrate_loss_plot_combinations_2.csv'
@@ -221,7 +236,6 @@ def main(N_RUN):
     if args.dry_run:
         print("--- 🧪 EXECUTING IN DRY RUN MODE 🧪 ---")
         print("No models will be trained. The script will outline the planned experiments.")
-        # --- ADDED: Show where main results and summaries will be saved ---
         print(f"\nMain results will be logged to: '{RESULT_NAME}'")
         print(f"Validation summary DataFrames will be saved in: '{os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')}'")
     elif args.log_plan:
@@ -229,6 +243,7 @@ def main(N_RUN):
         print("The plan for each experiment will be printed before it runs.")
         print(f"\nMain results will be logged to: '{RESULT_NAME}'")
         print(f"Validation summary DataFrames will be saved in: '{os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')}'")
+
 
 
     # 1. Separate DFs for 3-fold cross-validation
@@ -282,7 +297,7 @@ def main(N_RUN):
         N_EPOCHS = 1 # Formerly row['epochs']
         BETA = 0.01 # Formerly row['betas']
         LEARNING_RATE = 1e-5 # Formerly row['learning_rate']
-        EPSILON = 0 # Formerly row['epsilons']  # Epsilon for constructing preference pairs
+        EPSILON = args.epsilon # Formerly row['epsilons']  # Epsilon for constructing preference pairs
         LOGGING_STEPS = 2
         ADAM_BETAS = (0.9, 0.999)
         ADAM_EPSILON = 1e-8
