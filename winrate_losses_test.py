@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import os 
+import os
 import sys
 import json
 import random
@@ -8,14 +8,15 @@ from Bio import SeqIO
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple, Union
-from src.pyutils.ml_tools import  reward_hydrophobicity
-from src.pyutils.data_utils import *
-import matplotlib.pyplot as plt 
+# Assuming these are in your project's src directory
+# from src.pyutils.ml_tools import  reward_hydrophobicity
+# from src.pyutils.data_utils import *
+import matplotlib.pyplot as plt
 from trl import DPOConfig, DPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import Dataset
 from datasets import DatasetDict
-from tqdm.auto import tqdm  
+from tqdm.auto import tqdm
 import csv
 import torch
 import gc
@@ -24,16 +25,8 @@ import argparse
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# INPUT VARIABLES:
-# N_RUN = 0 
-# FILENAME = 'gh114.csv' # CSV for training and testing models
-# PATH = os.path.join(os.getcwd(), 'data', 'raw', FILENAME) # PATH to file
-# PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
-# RESULT_NAME = os.path.join(os.getcwd(),PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}.csv') # MODIFIED: New result file name
-# PLOT_FILENAME = os.path.join(os.getcwd(),PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}_barplot.pdf')
-
-
-
+# It's good practice to define functions that might be used elsewhere
+# at the top level of the module.
 
 def calculate_winrate(df):
     """Calculates the winrate (accuracy). A win is when the model prefers the
@@ -42,29 +35,31 @@ def calculate_winrate(df):
     logps_condition = df['chosen_logps'] > df['rejected_logps']
     # Condition 2: The chosen sequence actually has a higher ground-truth score.
     target_condition = df['chosen_target_reg'] > df['rejected_target_reg']
-    # Calculate the mean where both conditions are true.
+    # A "win" is when the model's preference aligns with the ground truth.
     winrate = (logps_condition & target_condition).mean()
     return winrate
 
 
 def memory_stats():
-    print("memory allocated: ", torch.cuda.memory_allocated()/1024**2)
-    print("memory reserved: ", torch.cuda.memory_reserved()/1024**2)
+    """Prints CUDA memory statistics."""
+    print(f"Memory Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MB")
+    print(f"Memory Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MB")
 
-def get_logps(trainer : DPOTrainer):
-    
+def get_logps(trainer: DPOTrainer):
+    """Extracts reference log probabilities from the trainer's dataset."""
+    # Ensure the dataloader is initialized to access the processed dataset
     trainer.get_train_dataloader()
     ref_chosen_logps = trainer.train_dataset['ref_chosen_logps']
     ref_rejected_logps = trainer.train_dataset['ref_rejected_logps']
-
     return ref_chosen_logps, ref_rejected_logps
 
 def construct_pairs_e(Yvec, epsilon):
     '''
     Constructs list of pairs of indexes and their score differences.
     
-    Yvec: list of values in descending order from the preference value dataset [int]
-    epsilon: Threshold of minimum difference for the pairs to be selected (0-1)
+    Args:
+        Yvec (list or np.array): A list of scores, assumed to be sorted in descending order.
+        epsilon (float): The minimum score difference threshold for a pair to be included.
     
     Returns:
         tuple: (index_pairs, pair_differences)
@@ -74,17 +69,16 @@ def construct_pairs_e(Yvec, epsilon):
     Yvec = np.asarray(Yvec)
     N = len(Yvec)
 
-    # Use broadcasting to compute differences efficiently
-    # Only consider upper triangle because Y_i > Y_j for i < j due to descending order
-    i_idx, j_idx = np.triu_indices(N, k=1)  # i < j
+    # Efficiently find all pairs (i, j) where i < j
+    i_idx, j_idx = np.triu_indices(N, k=1)
 
-    # Compute differences only for upper triangle
+    # Calculate the difference Y_i - Y_j for all these pairs
     diff = Yvec[i_idx] - Yvec[j_idx]
 
-    # Apply epsilon condition
+    # Create a mask to filter pairs based on the epsilon threshold
     mask = diff > epsilon
     
-    # Get the pairs and the corresponding differences that satisfy the condition
+    # Apply the mask to get the valid pairs and their differences
     valid_pairs = np.stack([i_idx[mask], j_idx[mask]], axis=1).astype(int)
     valid_diffs = diff[mask]
 
@@ -93,63 +87,65 @@ def construct_pairs_e(Yvec, epsilon):
 
 def format_string_pairs_e(strings, index_pairs, pair_diffs, N_characters):
     '''
-    returns a dictionary for preferences learning for the DPO trainer
+    Formats sequence pairs into a dictionary suitable for the DPO trainer.
     
-    strings: List of sequences to compare 
-    index_pairs: List of the indexes to select 
-    pair_diffs: List of the score differences for each pair
-    N_characters: int that selects the first N characters for the prompt
+    Args:
+        strings (List[str]): The list of all sequences.
+        index_pairs (np.array): Array of index pairs (chosen, rejected).
+        pair_diffs (np.array): Array of score differences corresponding to the pairs.
+        N_characters (int or None): Number of characters for the prompt. If None, uses 'M'.
+    
+    Returns:
+        dict: A dictionary with "prompt", "chosen", "rejected", and "epsilon" lists.
     '''
+    result = {"prompt": [], "chosen": [], "rejected": [], "epsilon": []}
+    force_prompt = 'M' if N_characters is None else None
 
-    if N_characters is None:
-        N_characters = 1
-        force_prompt = 'M'
-    else:
-        force_prompt = None
-
-    result = {
-        "prompt": [],
-        "chosen": [],
-        "rejected": [],
-        "epsilon": []  # The new key for the difference values
-    }
-
-    # Iterate through both the pairs and their differences simultaneously
     for (i, j), diff_value in zip(index_pairs, pair_diffs):
         chosen_str = strings[i]
         rejected_str = strings[j]
-        if force_prompt is not None:
+        
+        if force_prompt:
             prompt = force_prompt
             chosen = chosen_str
             rejected = rejected_str
-
         else:
-            prompt = chosen_str[:N_characters]  # or could use rejected_str[:N_characters]
+            prompt = chosen_str[:N_characters]
             chosen = chosen_str[N_characters:]
             rejected = rejected_str[N_characters:]
 
         result["prompt"].append(prompt)
         result["chosen"].append(chosen)
         result["rejected"].append(rejected)
-        result["epsilon"].append(diff_value) # Append the actual difference value
+        result["epsilon"].append(diff_value)
 
     return result
 
-# --- PLOTTING FUNCTION (to be run at the end) ---
 def create_barplot(file_path, plot_path):
     """
-    Reads experiment results and creates a bar plot of winrates.
+    Reads experiment results from a CSV and creates a bar plot of winrates,
+    grouped by loss type and dataset.
     """
     if not os.path.exists(file_path):
         print(f"❌ Error: Results file not found at '{file_path}'")
         return
-    df = pd.read_csv(file_path)
+    
+    try:
+        df = pd.read_csv(file_path)
+        if df.empty:
+            print("⚠️ Warning: Results file is empty. No plot will be generated.")
+            return
+    except pd.errors.EmptyDataError:
+        print("⚠️ Warning: Results file is empty. No plot will be generated.")
+        return
+
     print("\n--- 📊 Creating Final Plot 📊 ---")
     print("Loaded results data for plotting:")
     print(df.head())
 
     sns.set_theme(style="whitegrid")
     plt.figure(figsize=(12, 8))
+    
     barplot = sns.barplot(
         data=df,
         x='loss_type',
@@ -159,6 +155,8 @@ def create_barplot(file_path, plot_path):
         capsize=.05,
         palette='viridis'
     )
+    
+    # Overlay individual data points for better visibility
     sns.stripplot(
         data=df,
         x='loss_type',
@@ -167,280 +165,236 @@ def create_barplot(file_path, plot_path):
         palette='dark:red',
         jitter=True,
         dodge=True,
-        alpha=0.9,
+        alpha=0.8,
         linewidth=1,
         edgecolor='black',
         ax=barplot
     )
 
-    plt.title('Mean Winrate by Loss Type with Standard Deviation', fontsize=16, weight='bold')
+    plt.title('Mean Winrate by Loss Type and Dataset', fontsize=16, weight='bold')
     plt.xlabel('Loss Type', fontsize=12)
     plt.ylabel('Mean Winrate', fontsize=12)
-    min_val = df['winrate'].min()
-    max_val = df['winrate'].max()
-    plt.ylim(bottom=min_val * 0.95, top=max_val * 1.05)
+    
+    if not df['winrate'].empty:
+        min_val = df['winrate'].min()
+        max_val = df['winrate'].max()
+        plt.ylim(bottom=min_val * 0.95, top=max_val * 1.05)
     
     handles, labels = barplot.get_legend_handles_labels()
-    num_datasets = df['dataset_name'].nunique()
-    plt.legend(handles[:num_datasets], labels[:num_datasets], title='Dataset Name', loc='upper right')
+    num_hue_levels = df['dataset_name'].nunique()
+    plt.legend(handles[:num_hue_levels], labels[:num_hue_levels], title='Dataset Name', loc='best')
 
     plt.tight_layout()
-    # Save the plot to the specified path
     plt.savefig(plot_path, format='pdf', dpi=300)
-    print(f"\n✅ Successfully saved the plot as '{plot_path}'")
+    print(f"\n✅ Plot successfully saved to '{plot_path}'")
     plt.show()
 
 def main(N_RUN):
 
-    # --- 2. SET UP ARGUMENT PARSER ---
-    parser = argparse.ArgumentParser(description="Run DPO fine-tuning with an optional dry run.")
+    # --- 1. SET UP ARGUMENT PARSER ---
+    parser = argparse.ArgumentParser(description="Run DPO fine-tuning experiments from a config file.")
     parser.add_argument(
         '--dry-run',
         action='store_true',
-        help='If set, prints experiment configurations without running training.'
+        help='If set, prints the full experiment plan and exits without training.'
     )
-    # --- ADDED: New argument for verbose logging ---
     parser.add_argument(
         '--log-plan',
         action='store_true',
-        help='If set, prints the experiment plan before running each training step.'
-    )
-
-    # --- ADDED: New argument for the dataset name ---
-    parser.add_argument(
-        '--dataset-name',
-        type=str,
-        default='gh114.csv',
-        help='The name of the dataset CSV file to use from the "data/raw" directory.'
-    )
-    # --- ADDED: New argument for the epsilon value ---
-    parser.add_argument(
-        '--epsilon',
-        type=float,
-        default=0.0,
-        help='The epsilon threshold for constructing training preference pairs.'
+        help='If set, prints the plan for each individual experiment before it runs.'
     )
     args = parser.parse_args()
 
-    # --- CORRECTED PATH DEFINITIONS ---
-    FILENAME = args.dataset_name 
-    DATA_PATH = os.path.join(os.getcwd(), 'data', 'raw', FILENAME)
-    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), FILENAME,'DPO_loss_winrate_exp', f'run_{N_RUN}')
-    RESULT_NAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}.csv')
-    PLOT_FILENAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_{N_RUN}_barplot.pdf')
-    HYP_FILE = 'configs/winrate_loss_plot_combinations_2.csv'
+    # --- 2. DEFINE CORE PATHS AND CONFIGS ---
+    HYP_FILE = 'configs/winrate_loss_plot_combinations_3.csv'
     PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_loss_winrate_exp', f'run_{N_RUN}')
-    # --- CREATE THE OUTPUT DIRECTORY ---
     os.makedirs(PARENT_OUTPUT_DIR, exist_ok=True)
+    
+    RESULT_NAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_run_{N_RUN}.csv')
+    PLOT_FILENAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_losses_exp_run_{N_RUN}_barplot.pdf')
 
+    if not os.path.exists(HYP_FILE):
+        print(f"❌ Error: Hyperparameter file not found at '{HYP_FILE}'")
+        dummy_data = {
+            'dataset': ['gh114.csv', 'gh114.csv', 'cm.csv', 'ppat.csv'],
+            'loss_type': ['sigmoid', 'ipo', 'sigmoid', 'ipo'],
+            'training_fold': ['part_0', 'part_1', 'part_0', 'part_2']
+        }
+        pd.DataFrame(dummy_data).to_csv(HYP_FILE, index=False)
+        print(f"A dummy config file has been created at '{HYP_FILE}'. Please edit it and run again.")
+        return
+        
+    hyp_df = pd.read_csv(HYP_FILE)
+
+    # --- 3. MODIFIED DRY RUN LOGIC ---
     if args.dry_run:
         print("--- 🧪 EXECUTING IN DRY RUN MODE 🧪 ---")
-        print("No models will be trained. The script will outline the planned experiments.")
-        print(f"\nMain results will be logged to: '{RESULT_NAME}'")
-        print(f"Validation summary DataFrames will be saved in: '{os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')}'")
-    elif args.log_plan:
-        print("--- 📋 EXECUTING IN VERBOSE MODE 📋 ---")
-        print("The plan for each experiment will be printed before it runs.")
-        print(f"\nMain results will be logged to: '{RESULT_NAME}'")
-        print(f"Validation summary DataFrames will be saved in: '{os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')}'")
+        print("The script will not train any models. It will outline the planned experiments based on your config file.")
+        print(f"\n📝 Using Config File: '{HYP_FILE}'")
+        print("\n--- Planned Experiment Combinations ---")
+        
+        planned_runs = []
+        for _, row in hyp_df.iterrows():
+            dataset_name = row['dataset']
+            # This logic mirrors the main loop to predict the epsilon value
+            if 'gh114' in dataset_name:
+                epsilon = 0.01
+            elif 'cm' in dataset_name:
+                epsilon = 0.1
+            elif 'ppat' in dataset_name:
+                epsilon = 1.0
+            else:
+                epsilon = 0.0
+            
+            planned_runs.append({
+                "dataset": dataset_name,
+                "loss": row['loss_type'],
+                "epsilon": epsilon,
+                "fold": row['training_fold']
+            })
+            
+        # Print a formatted table of the planned runs
+        print(f"\n{'Dataset':<20} | {'Loss Type':<15} | {'Epsilon':<10} | {'Training Fold'}")
+        print("-" * 68)
+        for run in planned_runs:
+            print(f"{run['dataset']:<20} | {run['loss']:<15} | {run['epsilon']:<10.2f} | {run['fold']}")
 
+        print("\n--- ✅ Dry run complete. To run these experiments, execute the script without the --dry-run flag. ---")
+        return # Exit the main function immediately
 
-
-    # 1. Separate DFs for 3-fold cross-validation
-    
-    df = pd.read_csv(filepath_or_buffer = DATA_PATH) 
-
-    df_part0 = df[(df['part_0'] == 1) & (df['part_1'] == 0) & (df['part_2'] == 0)]
-    df_part1 = df[(df['part_1'] == 1) & (df['part_0'] == 0) & (df['part_2'] == 0)]
-    df_part2 = df[(df['part_2'] == 1) & (df['part_0'] == 0) & (df['part_1'] == 0)]
-    dfs = [df_part0, df_part1, df_part2]
-
-    
-    TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
-
-    # 2. Initialize new results file if it doesn't exist
+    # --- 4. INITIALIZE RESULTS FILE for actual run ---
     if not os.path.exists(RESULT_NAME):
         with open(RESULT_NAME, 'w', newline='') as f:
             writer = csv.writer(f)
-            # Use the new, requested column names
-            writer.writerow(['loss_type', 'winrate', 'P_train', 'dataset_name'])
+            writer.writerow(['loss_type', 'winrate', 'training_fold', 'dataset_name'])
 
-    # Load existing results to avoid re-running processed combinations
     processed_combinations = set()
-    if os.path.exists(RESULT_NAME):
-        try:
-            results_df = pd.read_csv(RESULT_NAME)
-            # Update the key to check for already processed runs
+    try:
+        results_df = pd.read_csv(RESULT_NAME)
+        if not results_df.empty:
             processed_combinations = set(zip(
                 results_df['dataset_name'], 
-                results_df['Loss type'], 
-                results_df['P_train']
+                results_df['loss_type'], 
+                results_df['training_fold']
             ))
-        except (pd.errors.EmptyDataError, KeyError):
-            processed_combinations = set()
+    except (pd.errors.EmptyDataError, KeyError):
+        processed_combinations = set()
 
-    # --- Cross-validation loop ---
-    for i, df_train in enumerate(dfs):
+    # --- 5. MAIN EXPERIMENT LOOP ---
+    for _, row in hyp_df.iterrows():
+        dataset_name = row['dataset']
+        loss_type = row['loss_type']
+        training_fold = row['training_fold']
 
+        if (dataset_name, loss_type, training_fold) in processed_combinations:
+            print(f"⏭️ Skipping already processed combination: {dataset_name}, {loss_type}, {training_fold}")
+            continue
+
+        if 'gh114' in dataset_name:
+            EPSILON = 0.01
+        elif 'cm' in dataset_name:
+            EPSILON = 0.1
+        elif 'ppat' in dataset_name:
+            EPSILON = 1.0
+        else:
+            EPSILON = 0.0
+        
+        print(f"\n{'='*60}\n▶️ Starting Experiment: [{dataset_name} | {loss_type} | {training_fold}] with Epsilon={EPSILON}\n{'='*60}")
+        
+        DATA_PATH = os.path.join(os.getcwd(), 'data', 'raw', dataset_name)
+        if not os.path.exists(DATA_PATH):
+            print(f"❌ Error: Dataset file not found at '{DATA_PATH}'. Skipping this run.")
+            continue
+        
+        df = pd.read_csv(filepath_or_buffer=DATA_PATH)
+        df_part0 = df[df.get('part_0') == 1]
+        df_part1 = df[df.get('part_1') == 1]
+        df_part2 = df[df.get('part_2') == 1]
+        all_dfs = {'part_0': df_part0, 'part_1': df_part1, 'part_2': df_part2}
+        
+        if training_fold not in all_dfs:
+            print(f"❌ Error: Invalid training_fold '{training_fold}'. Must be one of {list(all_dfs.keys())}. Skipping.")
+            continue
+
+        df_train = all_dfs[training_fold]
+        val_folds = [key for key in all_dfs.keys() if key != training_fold]
+        df_valid_merged = pd.concat([all_dfs[key] for key in val_folds], ignore_index=True)
+
+        if df_train.empty or df_valid_merged.empty:
+            print(f"❌ Error: Data split resulted in empty train or validation set for fold '{training_fold}'. Skipping.")
+            continue
+
+        df_val_merged_filt = df_valid_merged[['sequence', 'target_reg']].copy()
+
+        df_sorted_train = df_train.sort_values(by='target_reg', ascending=False)
+        pairs_train, pairs_train_diff = construct_pairs_e(Yvec=df_sorted_train['target_reg'].to_list(), epsilon=EPSILON)
+        train_dict = format_string_pairs_e(strings=df_sorted_train['sequence'].to_list(), index_pairs=pairs_train, N_characters=None, pair_diffs=pairs_train_diff)
+        hf_train_dataset = Dataset.from_dict(train_dict)
+
+        df_sorted_valid = df_valid_merged.sort_values(by='target_reg', ascending=False)
+        pairs_valid, pairs_valid_diff = construct_pairs_e(Yvec=df_sorted_valid['target_reg'].to_list(), epsilon=0)
+        valid_dict = format_string_pairs_e(strings=df_sorted_valid['sequence'].to_list(), index_pairs=pairs_valid, N_characters=None, pair_diffs=pairs_valid_diff)
+        hf_val_dataset = Dataset.from_dict(valid_dict)
+
+        # Log plan for individual run if requested (dry-run case is now handled above)
+        if args.log_plan:
+            print("\n------------------- Individual Experiment Plan -------------------")
+            print(f"  - Dataset: {dataset_name}, Training Fold: {training_fold}")
+            print(f"  - Loss Type: {loss_type}, Epsilon: {EPSILON}")
+            print(f"  - Num Train Pairs: {len(pairs_train)}, Num Validation Pairs: {len(pairs_valid)}")
+            print("----------------------------------------------------------------\n")
+
+        TOKENIZER = AutoTokenizer.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
         MODEL = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
-        # Create a single merged validation set from the other two partitions
-        val_indices = [j for j in range(len(dfs)) if j != i]
-        df_valid_merged = pd.concat([dfs[val_indices[0]], dfs[val_indices[1]]], ignore_index=True).copy()
+        model_output_dir = os.path.join(PARENT_OUTPUT_DIR, "models", f"{dataset_name.replace('.csv','')}_{loss_type}_{training_fold}")
+
+        training_args = DPOConfig(
+            output_dir=model_output_dir, num_train_epochs=1, beta=0.01, learning_rate=1e-5,
+            loss_type=loss_type, logging_steps=10, precompute_ref_log_probs=True,
+            report_to='none', auto_find_batch_size=True,
+        )
+
+        trainer = DPOTrainer(model=MODEL, args=training_args, train_dataset=hf_train_dataset, processing_class=TOKENIZER)
+
+        print(f"🚀 Starting training...")
+        trainer.train()
+
+        print('Validating model...')
+        val_trainer = DPOTrainer(model=trainer.model, args=trainer.args, train_dataset=hf_val_dataset, processing_class=trainer.processing_class)
+        chosen_logps, rejected_logps = get_logps(val_trainer)
         
-        # This filtered version is used for merging later to get target values
-        df_val_merged_filt = df_valid_merged[['sequence', 'target_reg']]
-        
-        # 3. Load hyperparameters file (now contains dataset_name and loss_type)
-        hyp_file = pd.read_csv(filepath_or_buffer=HYP_FILE)
-       
-        # 4. FIXED HYPERPARAMETERS (previously from iterrows)
-        N_EPOCHS = 1 # Formerly row['epochs']
-        BETA = 0.01 # Formerly row['betas']
-        LEARNING_RATE = 1e-5 # Formerly row['learning_rate']
-        EPSILON = args.epsilon # Formerly row['epsilons']  # Epsilon for constructing preference pairs
-        LOGGING_STEPS = 2
-        ADAM_BETAS = (0.9, 0.999)
-        ADAM_EPSILON = 1e-8
-        ADAM_DECAY = 0.1
-        
-        # --- Hyperparameter loop ---
-        for _, row in hyp_file.iterrows():
-            current_part = f'part_{i}'
-            dataset_name = row['dataset']
-            loss_type = row['loss_type']
+        summary_df = pd.DataFrame({
+            'chosen_logps': chosen_logps, 'rejected_logps': rejected_logps,
+            'chosen_sequences': valid_dict['chosen'], 'rejected_sequences': valid_dict['rejected']
+        })
+        summary_df = pd.merge(summary_df, df_val_merged_filt, left_on='chosen_sequences', right_on='sequence', how='left').rename(columns={'target_reg': 'chosen_target_reg'}).drop(columns=['sequence'])
+        summary_df = pd.merge(summary_df, df_val_merged_filt, left_on='rejected_sequences', right_on='sequence', how='left').rename(columns={'target_reg': 'rejected_target_reg'}).drop(columns=['sequence'])
 
-            # Check if this specific combination has already been processed
-            if (dataset_name, loss_type, current_part) in processed_combinations:
-                print(f"Skipping already processed combination: {dataset_name}, {loss_type}, {current_part}")
-                continue
+        validation_results_dir = os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')
+        os.makedirs(validation_results_dir, exist_ok=True)
+        summary_filename = f"summary_{dataset_name.replace('.csv','')}_{loss_type}_{training_fold}.csv"
+        summary_filepath = os.path.join(validation_results_dir, summary_filename)
+        summary_df.to_csv(summary_filepath, index=False)
+        print(f"Validation summary saved to: {summary_filepath}")
 
-            # --- Prepare Training Data ---
-            df_sorted_train = df_train.sort_values(by='target_reg', ascending=False)
-            y_train = df_sorted_train['target_reg'].to_list()
-            seq_train = df_sorted_train['sequence'].to_list()
-            pairs_train, pairs_train_diff  = construct_pairs_e(Yvec=y_train, epsilon=EPSILON)
+        winrate = calculate_winrate(summary_df)
+        print(f'✅ Validation Winrate: {winrate:.4f}')
 
-            train_dict = format_string_pairs_e(strings=seq_train, index_pairs=pairs_train, N_characters=None, pair_diffs = pairs_train_diff)
-            hf_train_dataset = Dataset.from_dict(train_dict)
+        with open(RESULT_NAME, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([loss_type, float(winrate), training_fold, dataset_name])
 
-            # --- Prepare UNIFIED Validation Data ---
-            df_sorted_valid = df_valid_merged.sort_values(by='target_reg', ascending=False)
-            y_valid = df_sorted_valid['target_reg'].to_list()
-            seq_valid = df_sorted_valid['sequence'].to_list()
-            pairs_valid, pairs_valid_diff = construct_pairs_e(Yvec=y_valid, epsilon=0) # This should change to maximize validation pairs
-            valid_dict = format_string_pairs_e(strings=seq_valid, index_pairs=pairs_valid, N_characters=None, pair_diffs = pairs_valid_diff)
-            hf_val_dataset = Dataset.from_dict(valid_dict)
+        processed_combinations.add((dataset_name, loss_type, training_fold))
 
-            # --- ADDED: Define summary path here so it's available for the dry run printout ---
-            summary_filename = f"summary_{dataset_name}_{loss_type}_{current_part}.csv"
-            validation_results_dir = os.path.join(PARENT_OUTPUT_DIR, 'validation_summaries')
-            summary_filepath = os.path.join(validation_results_dir, summary_filename)
+        del trainer, val_trainer, MODEL, TOKENIZER, summary_df
+        gc.collect()
+        torch.cuda.empty_cache()
 
-            # --- 4. HANDLE DRY RUN ---
-            if args.dry_run or args.log_plan:
-                print("\n-------------------------------------------------")
-                print(f"▶️ Experiment Plan:")
-                print(f"  - Training Fold: {current_part}")
-                print(f"  - Dataset Name: {dataset_name}")
-                print(f"  - Loss Type: {loss_type}")
-                print(f"  - Num Train Pairs (epsilon={EPSILON}): {len(pairs_train)}")
-                print(f"  - Num Validation Pairs (epsilon=0): {len(pairs_valid)}")
-                print(f"  - Hyperparameters: N_EPOCHS={N_EPOCHS}, BETA={BETA}, LR={LEARNING_RATE}")
-                # --- ADDED: Show the specific path for the summary dataframe ---
-                print(f"  - Summary DF Name:        {summary_filename}")            
-            if args.dry_run:
-                continue
-
-
-
-            # --- Configure DPO Trainer ---
-            # Define a unique output directory for this specific model
-            model_output_dir = os.path.join(PARENT_OUTPUT_DIR, f"df_{dataset_name}_fold_{current_part}")
-            print(f"Model will be saved to: {model_output_dir}")
-
-            config_dict = {
-                'output_dir': model_output_dir,
-                'logging_steps': LOGGING_STEPS,
-                'beta': BETA,
-                'learning_rate': LEARNING_RATE,
-                'num_train_epochs': N_EPOCHS,
-                'adam_beta1': ADAM_BETAS[0],
-                'adam_beta2': ADAM_BETAS[1],
-                'adam_epsilon': ADAM_EPSILON,
-                'weight_decay': ADAM_DECAY,
-                'precompute_ref_log_probs': True,
-                'report_to': 'none',
-                'auto_find_batch_size': True,
-                'loss_type': loss_type
-            }
-
-            training_args = DPOConfig(**config_dict)
-
-            trainer = DPOTrainer(
-                model=MODEL,
-                args=training_args,
-                train_dataset=hf_train_dataset,
-                processing_class=TOKENIZER # Correct argument is 'tokenizer'
-            )
-
-            print(f"Starting training for {dataset_name} ({loss_type}) on {current_part}")
-            trainer.train()
-
-            # --- Evaluation on the single, merged validation set ---
-            print('Starting validation...')
-            val_trainer = DPOTrainer(
-                model=trainer.model,
-                args=trainer.args,
-                train_dataset=hf_val_dataset, # Use the unified validation dataset
-                processing_class=trainer.processing_class
-            )
-
-            chosen_logps, rejected_logps = get_logps(val_trainer)
-            chosen_df = pd.DataFrame({'chosen_sequences': valid_dict['chosen'], 'chosen_logps': chosen_logps})
-            chosen_df = pd.merge(chosen_df, df_val_merged_filt, left_on='chosen_sequences', right_on='sequence', how='left').rename(columns={'target_reg': 'chosen_target_reg'}).drop(columns=['sequence'])
-
-            rejected_df = pd.DataFrame({'rejected_sequences': valid_dict['rejected'], 'rejected_logps': rejected_logps})
-            rejected_df = pd.merge(rejected_df, df_val_merged_filt, left_on='rejected_sequences', right_on='sequence', how='left').rename(columns={'target_reg': 'rejected_target_reg'}).drop(columns=['sequence'])
-            
-            summary_df = pd.concat([chosen_df, rejected_df], axis=1)
-
-            # --- LINE YOU REQUESTED TO ADD, with logic to create the directory ---
-            os.makedirs(validation_results_dir, exist_ok=True)
-            summary_df.to_csv(summary_filepath, index=False)
-
-            winrate = calculate_winrate(summary_df)
-            print(f'Validation winrate: {winrate:.4f}')
-
-
-            # --- Write results to the new CSV format ---
-            with open(RESULT_NAME, 'a', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    loss_type, # type of loss
-                    float(winrate), # old accuracy 
-                    current_part, # training part
-                    dataset_name # gh114 
-                ])
-
-            # Add this combination to the processed set
-            processed_combinations.add((dataset_name, loss_type, current_part))
-
-            del trainer
-            del MODEL
-            gc.collect()
-            torch.cuda.empty_cache()
-
-    print('DONE OwO/')
-    if args.dry_run or args.log_plan:
-         print(f"\n--- ✅ {('Dry run' if args.dry_run else 'Verbose run')} complete. ---")
-        # --- FINAL PLOTTING STEP ---
-    # This block will now only be reached if it's NOT a dry run.
+    print('\n--- 🎉 All experiments complete! 🎉 ---')
+    
     if not args.dry_run:
-        # Check if a results file was created before trying to plot
-        if os.path.exists(RESULT_NAME):
-            create_barplot(RESULT_NAME, PLOT_FILENAME)
-
+        create_barplot(RESULT_NAME, PLOT_FILENAME)
 
 if __name__ == "__main__":
-    N_RUN = 7 
+    N_RUN = 8
     main(N_RUN)
