@@ -264,6 +264,7 @@ def main_dpo_training_and_eval(args):
                 'report_to': 'none',
                 'auto_find_batch_size': True,
                 'loss_type': loss_type,
+                'remove_unused_columns': False
             }
        
         training_args = DPOConfig(**config_dict)
