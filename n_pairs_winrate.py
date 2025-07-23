@@ -13,7 +13,7 @@ import torch
 import gc
 import argparse
 import math
-import shutil # ✨ NEW: For deleting temporary directories
+import shutil
 
 # --- Helper Functions ---
 
@@ -33,10 +33,10 @@ def get_logps(trainer: DPOTrainer) -> Tuple[List[float], List[float]]:
 
 def get_initial_logps_with_trainer(sequences: List[str], model, tokenizer) -> Dict[str, float]:
     """
-    ✨ MODIFIED: Calculates initial logps using the DPOTrainer mechanism, ensuring full cleanup.
+    Calculates initial logps using the DPOTrainer mechanism, ensuring full cleanup.
     """
     print("  Calculating initial log probabilities for training set...")
-    
+
     unique_sequences = sorted(list(set(sequences)))
     num_seqs = len(unique_sequences)
     dummy_dict = {"prompt": ["M"] * num_seqs, "chosen": unique_sequences, "rejected": [""] * num_seqs}
@@ -44,24 +44,22 @@ def get_initial_logps_with_trainer(sequences: List[str], model, tokenizer) -> Di
 
     temp_dir = os.path.join(os.getcwd(), "temp_dpo_logps_inference")
 
-    temp_config = DPOConfig(output_dir=temp_dir, precompute_ref_log_probs=True, report_to='none', save_safetensors=False) 
-    
+    temp_config = DPOConfig(output_dir=temp_dir, precompute_ref_log_probs=True, report_to='none', save_safetensors=False)
+
     temp_trainer = DPOTrainer(model=model, args=temp_config, train_dataset=dummy_dataset, processing_class=tokenizer)
 
-    # The trainer's internal pre-computation is wrapped in torch.no_grad(), preventing gradient storage.
     chosen_logps, _ = get_logps(temp_trainer)
-    
+
     logp_map = {seq: logp for seq, logp in zip(unique_sequences, chosen_logps)}
-    
-    # ✨ NEW: Explicitly clean up all temporary objects and files
+
     del chosen_logps
     del temp_trainer
     del temp_config
     del dummy_dataset
-    
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
-    
+
     return logp_map
 
 
@@ -80,13 +78,13 @@ def format_string_pairs_e(strings: List[str], all_pairs_data: List[Tuple[Tuple[i
     '''Formats a dictionary for DPO.'''
     result = {"prompt": [], "chosen": [], "rejected": [], "epsilon": []}
     force_prompt = 'M' if N_characters is None else None
-    
+
     for (i, j), diff_value in all_pairs_data:
         chosen_str, rejected_str = strings[i], strings[j]
         prompt = force_prompt if force_prompt else chosen_str[:N_characters]
         chosen = chosen_str if force_prompt else chosen_str[N_characters:]
         rejected = rejected_str if force_prompt else rejected_str[N_characters:]
-        
+
         result["prompt"].append(prompt)
         result["chosen"].append(chosen)
         result["rejected"].append(rejected)
@@ -110,7 +108,7 @@ def print_dry_run_plan(modalities: List[str], n_values: List[int], replicates: i
 
     print("\n--- Training Schedule ---")
     total_models = len(modalities) * len(n_values) * replicates
-    
+
     for modality in modalities:
         print(f"\n  For Method: '{modality}'")
         for n in n_values:
@@ -122,7 +120,7 @@ def print_dry_run_plan(modalities: List[str], n_values: List[int], replicates: i
 
     print("-----------------------------------")
     print(f"  - Total models to be trained: {total_models}")
-    
+
     print("\n--- Dry run complete. Exiting. ---\n")
 
 
@@ -138,17 +136,17 @@ def main():
 
     # --- Configuration ---
     N_VALUES = [2, 4, 8, 16, 32]
-    LOSS_TYPE = 'sigmoid'
+    LOSS_TYPE = 'w_sigmoid'
     BETA = 0.01
     LEARNING_RATE = 1e-5
     N_EPOCHS = 1
     MODALITIES = ['IID_partition', 'max_discrepancy', 'min_discrepancy', 'max_logps', 'min_logps']
-    
+
     OUTPUT_NAME = os.path.splitext(args.input_file)[0]
-    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_exp_all_methods', OUTPUT_NAME, f'run_{args.n_run}')
-    RESULT_NAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_exp_{args.n_run}.csv')
+    PARENT_OUTPUT_DIR = os.path.join(os.getcwd(), 'DPO_exp_all_methods', OUTPUT_NAME,LOSS_TYPE, f'run_{args.n_run}')
+    RESULT_NAME = os.path.join(PARENT_OUTPUT_DIR, f'winrate_exp_{LOSS_TYPE}_{args.n_run}.csv')
     os.makedirs(PARENT_OUTPUT_DIR, exist_ok=True)
-    
+
     if args.dry_run:
         print_dry_run_plan(MODALITIES, N_VALUES, args.replicates, LOSS_TYPE, RESULT_NAME)
         sys.exit(0)
@@ -171,12 +169,13 @@ def main():
     for n_samples in N_VALUES:
         for replicate in range(1, args.replicates + 1):
             print(f"\n{'='*40}\nProcessing n={n_samples}, Replicate={replicate}/{args.replicates}\n{'='*40}")
-            
-            val_partition_id = random.choice(partitions)
-            train_partition_ids = [p for p in partitions if p != val_partition_id]
+
+            # ✨ MODIFIED: Partitions are now fixed, not randomly selected.
+            train_partition_ids = [0, 1]
+            val_partition_id = 2
             df_train_full = df_full[df_full['partition'].isin(train_partition_ids)].copy()
             df_val = df_full[df_full['partition'] == val_partition_id]
-            
+
             df_val_sorted = df_val.sort_values(by='target_reg', ascending=False).reset_index(drop=True)
             hf_val_dataset = Dataset.from_dict(format_string_pairs_e(
                 df_val_sorted['sequence'].to_list(),
@@ -193,7 +192,7 @@ def main():
 
             for modality in MODALITIES:
                 print(f"\n--- Training: Modality={modality}, n={n_samples}, Replicate={replicate}/{args.replicates} ---")
-                
+
                 train_pairs = []
                 train_sequences = []
 
@@ -203,13 +202,13 @@ def main():
                     train_sequences = df_train_sample_sorted['sequence'].to_list()
                     train_scores = df_train_sample_sorted['target_reg'].to_list()
                     train_pairs = construct_pairs_e(Yvec=train_scores, epsilon=args.epsilon)
-                
+
                 elif modality in ['max_discrepancy', 'min_discrepancy']:
                     n_prime = calculate_n_prime(n_samples)
                     df_train_sorted = df_train_full.sort_values(by='target_reg', ascending=False).reset_index(drop=True)
                     train_sequences = df_train_sorted['sequence'].to_list()
                     all_pairs = construct_pairs_e(df_train_sorted['target_reg'].to_list(), args.epsilon)
-                    
+
                     if len(all_pairs) < n_prime: continue
                     train_pairs = all_pairs[:n_prime] if modality == 'max_discrepancy' else all_pairs[-n_prime:]
 
@@ -217,23 +216,23 @@ def main():
                     n_prime = calculate_n_prime(n_samples)
                     df_train_logp_sorted = df_train_full.sort_values(by='logps', ascending=False).reset_index(drop=True)
                     train_sequences = df_train_logp_sorted['sequence'].to_list()
-                    
+
                     logp_pairs = construct_pairs_e(df_train_logp_sorted['logps'].to_list(), args.epsilon)
                     if len(logp_pairs) < n_prime: continue
                     selected_pairs_by_logp = logp_pairs[:n_prime] if modality == 'max_logps' else logp_pairs[-n_prime:]
-                    
+
                     target_reg_scores = df_train_logp_sorted['target_reg'].to_list()
                     train_pairs = [((i, j), target_reg_scores[i] - target_reg_scores[j]) for (i, j), _ in selected_pairs_by_logp]
 
                 if not train_pairs:
                     print(f"--> Skipping: No training pairs generated for this configuration.")
                     continue
-                
+
                 hf_train_dataset = Dataset.from_dict(format_string_pairs_e(train_sequences, train_pairs))
                 n_train_pairs = len(hf_train_dataset)
 
                 model = AutoModelForCausalLM.from_pretrained("NorseDrunkenSailor/ProtGPT2-with-pad")
-                model_output_dir = os.path.join(PARENT_OUTPUT_DIR, f"model_{modality}_n{n_samples}_rep{replicate}")
+                model_output_dir = os.path.join(PARENT_OUTPUT_DIR,'models', f"model_{modality}_n{n_samples}_rep{replicate}")
 
                 training_args = DPOConfig(
                     output_dir=model_output_dir, beta=BETA, learning_rate=LEARNING_RATE,
@@ -247,7 +246,7 @@ def main():
                 print('Starting validation...')
                 val_trainer = DPOTrainer(model=trainer.model, args=trainer.args, train_dataset=hf_val_dataset, processing_class=trainer.processing_class)
                 chosen_logps, rejected_logps = get_logps(val_trainer)
-                
+
                 df_val_merged = df_val_sorted[['sequence', 'target_reg']].drop_duplicates()
                 chosen_df = pd.DataFrame({'chosen_sequences': hf_val_dataset['chosen'], 'chosen_logps': chosen_logps})
                 chosen_df = pd.merge(chosen_df, df_val_merged, left_on='chosen_sequences', right_on='sequence').rename(columns={'target_reg': 'chosen_target_reg'}).drop(columns=['sequence'])
@@ -255,17 +254,17 @@ def main():
                 rejected_df = pd.merge(rejected_df, df_val_merged, left_on='rejected_sequences', right_on='sequence').rename(columns={'target_reg': 'rejected_target_reg'}).drop(columns=['sequence'])
                 summary_df = pd.concat([chosen_df, rejected_df], axis=1).dropna()
 
-                summary_filepath = os.path.join(model_output_dir, summary_df)
+                summary_filepath = os.path.join(model_output_dir, 'summary_df.csv')
                 summary_df.to_csv(summary_filepath, index=False)
                 print(f"Validation summary saved to: {summary_filepath}")
-                
+
                 if not summary_df.empty:
                     winrate = calculate_winrate(summary_df)
                     print(f'--> Winrate: {winrate:.4f}')
                     with open(RESULT_NAME, 'a', newline='') as f:
                         writer = csv.writer(f)
                         writer.writerow([modality, replicate, n_samples, n_train_pairs, n_valid_pairs, float(winrate), LOSS_TYPE])
-                
+
                 del trainer, model, val_trainer, summary_df, hf_train_dataset
                 gc.collect()
                 torch.cuda.empty_cache()
